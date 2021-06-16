@@ -3,18 +3,36 @@ syntax = "proto3";
 option java_multiple_files = true;
 option java_package = "br.com.rodrigo";
 option java_outer_classname = "KeyManagerGrpc";
-option objc_class_prefix = "HLW";
+
 
 package br.com.rodrigo;
 
-service KeyManagerGrpcService {
-  rpc send (KeyManagerGrpcRequest) returns (KeyManagerGrpcReply) {}
+service KeyManagerGrpcService  {
+  rpc registraChave (RegistraChaveRequest) returns (RegistraChaveResponse) {}
 }
 
-message KeyManagerGrpcRequest {
-  string name = 1;
+enum TipoChaveMessage{
+  TIPO_CHAVE_INDEFINIDO = 0;
+  CPF = 1;
+  CELULAR = 2;
+  EMAIL = 3;
+  ALEATORIA = 4;
+
 }
 
-message KeyManagerGrpcReply {
-  string message = 1;
+enum TipoContaMessage{
+  TIPO_CONTA_INDEFINIDO = 0;
+  CONTA_CORRENTE = 1;
+  CONTA_POUPANCA = 2;
+}
+
+message RegistraChaveRequest {
+  string identificadorCliente = 1;
+  TipoChaveMessage tipoChaveMessage = 2;
+  string valorDaChave = 3;
+  TipoContaMessage tipoContaMessage = 4;
+}
+
+message RegistraChaveResponse {
+  string pixId = 1;
 }
