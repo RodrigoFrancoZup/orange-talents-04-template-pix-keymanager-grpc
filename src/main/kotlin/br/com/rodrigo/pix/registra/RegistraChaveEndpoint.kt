@@ -3,6 +3,7 @@ package br.com.rodrigo.pix.registra
 import br.com.rodrigo.*
 import br.com.rodrigo.pix.TipoChave
 import br.com.rodrigo.pix.TipoConta
+import br.com.rodrigo.pix.exclusao.ExclusaoChaveDto
 import br.com.rodrigo.util.handler.ExceptionHandler
 import io.grpc.stub.StreamObserver
 import javax.inject.Inject
@@ -17,7 +18,6 @@ class RegistraChaveEndpoint(@Inject val chavePixService: ChavePixService) :
         request: RegistraChaveRequest,
         responseObserver: StreamObserver<RegistraChaveResponse>
     ) {
-
         val chavePixDto = request.toChavePixDto()
         val chavePix = chavePixService.registra(chavePixDto)
 
@@ -28,6 +28,7 @@ class RegistraChaveEndpoint(@Inject val chavePixService: ChavePixService) :
         responseObserver.onNext(response)
         responseObserver.onCompleted()
     }
+
 }
 
 fun RegistraChaveRequest.toChavePixDto(): ChavePixDto {
@@ -45,6 +46,3 @@ fun RegistraChaveRequest.toChavePixDto(): ChavePixDto {
         chave = this.valorDaChave
     )
 }
-
-
-

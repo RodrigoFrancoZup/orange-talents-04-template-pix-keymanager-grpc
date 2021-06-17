@@ -19,6 +19,10 @@ class ChavePix(
     @Id
     @GeneratedValue
     val id: UUID? = null
+
+    fun verificaSeEhDono(clienteId: UUID) : Boolean{
+        return this.identificadorCliente == clienteId
+    }
 }
 
 

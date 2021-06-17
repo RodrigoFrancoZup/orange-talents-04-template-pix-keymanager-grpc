@@ -19,7 +19,7 @@ class ChavePixService(
 
     fun registra(@Valid chavePixDto: ChavePixDto):ChavePix{
 
-        var chavePix: ChavePix? = null
+         val chavePix: ChavePix
 
         // Verifica se chave já existe/já é usada
         if(repository.existsByChave(chavePixDto.chave)){
@@ -37,6 +37,6 @@ class ChavePixService(
             throw IllegalStateException("Cliente não encontrado no Itau")
         }
 
-        return chavePix!!
+        return chavePix
     }
 }

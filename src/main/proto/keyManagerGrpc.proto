@@ -9,6 +9,11 @@ package br.com.rodrigo;
 
 service KeyManagerGrpcService  {
   rpc registraChave (RegistraChaveRequest) returns (RegistraChaveResponse) {}
+
+}
+
+service KeyManagerRemoveGrpcService{
+  rpc removeChave (RemoveChaveRequest) returns (RegistraChaveResponse) {}
 }
 
 enum TipoChaveMessage{
@@ -24,6 +29,11 @@ enum TipoContaMessage{
   TIPO_CONTA_INDEFINIDO = 0;
   CONTA_CORRENTE = 1;
   CONTA_POUPANCA = 2;
+}
+
+message RemoveChaveRequest{
+  string identificadorCliente = 1;
+  string pixId = 2;
 }
 
 message RegistraChaveRequest {

@@ -1,6 +1,7 @@
 package br.com.rodrigo.util.handler
 
 import br.com.rodrigo.util.exception.ChavePixExistenteException
+import br.com.rodrigo.util.exception.ChavePixInexistenteException
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
@@ -65,6 +66,22 @@ class ExceptionHandlerIntercptor : MethodInterceptor<Any, Any> {
             responseObserver.onError(statusRuntimeException)
         } catch (e: IllegalStateException) {
             val status = Status.INVALID_ARGUMENT
+                .withCause(e)
+                .withDescription(e.message)
+
+            val statusRuntimeException = StatusRuntimeException(status)
+            val responseObserver = context.parameterValues[1] as StreamObserver<*>
+            responseObserver.onError(statusRuntimeException)
+        }catch (e: ChavePixInexistenteException) {
+            val status = Status.NOT_FOUND
+                .withCause(e)
+                .withDescription(e.message)
+
+            val statusRuntimeException = StatusRuntimeException(status)
+            val responseObserver = context.parameterValues[1] as StreamObserver<*>
+            responseObserver.onError(statusRuntimeException)
+        }catch (e: IllegalAccessException) {
+            val status = Status.FAILED_PRECONDITION
                 .withCause(e)
                 .withDescription(e.message)
 
