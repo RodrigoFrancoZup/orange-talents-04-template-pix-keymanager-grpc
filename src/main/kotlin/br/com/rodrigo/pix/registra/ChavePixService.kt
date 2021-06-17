@@ -33,6 +33,8 @@ class ChavePixService(
         if(contaItauResponse.body.isPresent){
             chavePix = chavePixDto.toModel()
             repository.save(chavePix)
+        }else{
+            throw IllegalStateException("Cliente não encontrado no Itau")
         }
 
         return chavePix!!
