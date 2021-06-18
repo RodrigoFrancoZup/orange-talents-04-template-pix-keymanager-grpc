@@ -31,7 +31,8 @@ class ChavePixService(
 
         //Se a consulta ao serviço Itau confirmou que há conta, podemos salvar
         if(contaItauResponse.body.isPresent){
-            chavePix = chavePixDto.toModel()
+            val body = contaItauResponse.body
+            chavePix = chavePixDto.toModel(body.get().toDadosBancarios())
             repository.save(chavePix)
         }else{
             throw IllegalStateException("Cliente não encontrado no Itau")

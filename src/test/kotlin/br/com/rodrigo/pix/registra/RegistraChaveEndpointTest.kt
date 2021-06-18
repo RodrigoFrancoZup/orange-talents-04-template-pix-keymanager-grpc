@@ -8,10 +8,7 @@ import br.com.rodrigo.integracao.itau.ContasItauClient
 import br.com.rodrigo.integracao.itau.ContasItauResponse
 import br.com.rodrigo.integracao.itau.InstituicaoResponse
 import br.com.rodrigo.integracao.itau.TitularResponse
-import br.com.rodrigo.pix.ChavePix
-import br.com.rodrigo.pix.ChavePixRepository
-import br.com.rodrigo.pix.TipoChave
-import br.com.rodrigo.pix.TipoConta
+import br.com.rodrigo.pix.*
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.micronaut.http.HttpResponse
@@ -174,11 +171,13 @@ internal class RegistraChaveEndpointTest(
     fun `deve gerar uma exception ao cadastar chave repetida`() {
         //Cenário
         repository.deleteAll()
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
         val chave = ChavePix(
             identificadorCliente = UUID.randomUUID(),
             tipoChave = TipoChave.EMAIL,
             tipoConta = TipoConta.CONTA_CORRENTE,
-            chave = "mentor@zup.com.br"
+            chave = "mentor@zup.com.br",
+            dadosBancario = dadosBancarios
         )
         repository.save(chave)
 

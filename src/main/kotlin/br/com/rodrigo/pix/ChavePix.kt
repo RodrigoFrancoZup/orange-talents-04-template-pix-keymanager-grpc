@@ -1,7 +1,9 @@
 package br.com.rodrigo.pix
 
+import java.time.LocalDateTime
 import java.util.*
 import javax.persistence.*
+import javax.validation.Valid
 
 @Entity
 class ChavePix(
@@ -13,12 +15,17 @@ class ChavePix(
 
     @Enumerated(EnumType.STRING)
     val tipoConta: TipoConta,
-    val chave: String
+    val chave: String,
+
+    @field:Valid
+    @Embedded
+    val dadosBancario: DadosBancarios
 ) {
 
     @Id
     @GeneratedValue
     val id: UUID? = null
+    val criadaEm: LocalDateTime = LocalDateTime.now()
 
     fun verificaSeEhDono(clienteId: UUID) : Boolean{
         return this.identificadorCliente == clienteId

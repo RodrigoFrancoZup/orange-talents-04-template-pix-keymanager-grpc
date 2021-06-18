@@ -2,10 +2,7 @@ package br.com.rodrigo.pix.exclusao
 
 import br.com.rodrigo.KeyManagerRemoveGrpcServiceGrpc
 import br.com.rodrigo.RemoveChaveRequest
-import br.com.rodrigo.pix.ChavePix
-import br.com.rodrigo.pix.ChavePixRepository
-import br.com.rodrigo.pix.TipoChave
-import br.com.rodrigo.pix.TipoConta
+import br.com.rodrigo.pix.*
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
@@ -26,7 +23,8 @@ internal class ExclusaoChaveEndpointTest(
         //CENARIO
         repository.deleteAll()
         val clienteId = UUID.randomUUID()
-        val chavePix = ChavePix(clienteId, TipoChave.EMAIL, TipoConta.CONTA_CORRENTE, "rodrigo@zup.com.br")
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val chavePix = ChavePix(clienteId, TipoChave.EMAIL, TipoConta.CONTA_CORRENTE, "rodrigo@zup.com.br", dadosBancarios)
         repository.save(chavePix)
 
         val request = RemoveChaveRequest.newBuilder()
@@ -70,7 +68,8 @@ internal class ExclusaoChaveEndpointTest(
         repository.deleteAll()
         val cliente1 = UUID.randomUUID()
         val cliente2 = UUID.randomUUID()
-        val chavePix = ChavePix(cliente1,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val chavePix = ChavePix(cliente1,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com",dadosBancarios)
         repository.save(chavePix)
 
         val request = RemoveChaveRequest.newBuilder()
@@ -93,7 +92,8 @@ internal class ExclusaoChaveEndpointTest(
         //CENARIO
         repository.deleteAll()
         val cliente = UUID.randomUUID()
-        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com", dadosBancarios)
         repository.save(chavePix)
 
         val request = RemoveChaveRequest.newBuilder()
@@ -115,7 +115,8 @@ internal class ExclusaoChaveEndpointTest(
         //CENARIO
         repository.deleteAll()
         val cliente = UUID.randomUUID()
-        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com", dadosBancarios)
         repository.save(chavePix)
 
         val request = RemoveChaveRequest.newBuilder()
@@ -137,7 +138,8 @@ internal class ExclusaoChaveEndpointTest(
         //CENARIO
         repository.deleteAll()
         val cliente = UUID.randomUUID()
-        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com", dadosBancarios)
         repository.save(chavePix)
 
         val request = RemoveChaveRequest.newBuilder()
@@ -160,7 +162,8 @@ internal class ExclusaoChaveEndpointTest(
         //CENARIO
         repository.deleteAll()
         val cliente = UUID.randomUUID()
-        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com", dadosBancarios)
         repository.save(chavePix)
 
         val request = RemoveChaveRequest.newBuilder()

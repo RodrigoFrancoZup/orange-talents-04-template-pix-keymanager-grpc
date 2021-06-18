@@ -1,6 +1,7 @@
 package br.com.rodrigo.pix.registra
 
 import br.com.rodrigo.pix.ChavePix
+import br.com.rodrigo.pix.DadosBancarios
 import br.com.rodrigo.pix.TipoChave
 import br.com.rodrigo.pix.TipoConta
 import br.com.rodrigo.util.validation.ValidUUID
@@ -27,12 +28,13 @@ data class ChavePixDto(
     val tipoConta: TipoConta?
 ){
 
-    fun toModel(): ChavePix {
+    fun toModel(dadosBancarios: DadosBancarios): ChavePix {
         return ChavePix(
             identificadorCliente = UUID.fromString(clienteId),
             tipoChave = tipo!!,
             tipoConta = tipoConta!!,
-            chave = if(tipo == TipoChave.ALEATORIA) UUID.randomUUID().toString() else this.chave
+            chave = if(tipo == TipoChave.ALEATORIA) UUID.randomUUID().toString() else this.chave,
+            dadosBancario = dadosBancarios
         )
     }
 }
