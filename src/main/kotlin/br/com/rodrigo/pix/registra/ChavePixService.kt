@@ -1,10 +1,12 @@
 package br.com.rodrigo.pix.registra
 
+import br.com.rodrigo.integracao.bcb.BcbClient
+import br.com.rodrigo.integracao.bcb.classes.CreatePixKeyRequest
+import br.com.rodrigo.integracao.bcb.classes.KeyType
 import br.com.rodrigo.integracao.itau.ContasItauClient
 import br.com.rodrigo.pix.ChavePix
 import br.com.rodrigo.pix.ChavePixRepository
 import br.com.rodrigo.util.exception.ChavePixExistenteException
-import br.com.rodrigo.util.handler.ExceptionHandler
 import io.micronaut.validation.Validated
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -14,7 +16,8 @@ import javax.validation.Valid
 @Singleton
 class ChavePixService(
     @Inject val repository: ChavePixRepository,
-    @Inject val client: ContasItauClient
+    @Inject val client: ContasItauClient,
+    @Inject val clientBcbClient: BcbClient
 ) {
 
     fun registra(@Valid chavePixDto: ChavePixDto):ChavePix{
@@ -33,7 +36,19 @@ class ChavePixService(
         if(contaItauResponse.body.isPresent){
             val body = contaItauResponse.body
             chavePix = chavePixDto.toModel(body.get().toDadosBancarios())
-            repository.save(chavePix)
+
+            //Cadastrando no BCB
+            val responseBcb = clientBcbClient.cadastra(CreatePixKeyRequest.build(chavePix))
+
+            //Verifica se conseguiu salvar a chave no BCB
+            if(responseBcb.code() == 201){
+                if(responseBcb.body().keyType == KeyType.RANDOM){
+                    chavePix.atualizaChaveAleatoriaBcb(responseBcb.body().key)
+                }
+
+                repository.save(chavePix)
+            }
+
         }else{
             throw IllegalStateException("Cliente não encontrado no Itau")
         }

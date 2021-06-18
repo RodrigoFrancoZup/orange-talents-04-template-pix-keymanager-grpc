@@ -15,7 +15,7 @@ class ChavePix(
 
     @Enumerated(EnumType.STRING)
     val tipoConta: TipoConta,
-    val chave: String,
+    var chave: String,
 
     @field:Valid
     @Embedded
@@ -29,6 +29,10 @@ class ChavePix(
 
     fun verificaSeEhDono(clienteId: UUID) : Boolean{
         return this.identificadorCliente == clienteId
+    }
+
+    fun atualizaChaveAleatoriaBcb(chave: String){
+        this.chave = chave
     }
 }
 
