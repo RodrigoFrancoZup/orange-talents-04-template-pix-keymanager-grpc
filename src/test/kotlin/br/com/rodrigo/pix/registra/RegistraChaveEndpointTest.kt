@@ -4,6 +4,8 @@ import br.com.rodrigo.KeyManagerGrpcServiceGrpc
 import br.com.rodrigo.RegistraChaveRequest
 import br.com.rodrigo.TipoChaveMessage
 import br.com.rodrigo.TipoContaMessage
+import br.com.rodrigo.integracao.bcb.BcbClient
+import br.com.rodrigo.integracao.bcb.classes.*
 import br.com.rodrigo.integracao.itau.ContasItauClient
 import br.com.rodrigo.integracao.itau.ContasItauResponse
 import br.com.rodrigo.integracao.itau.InstituicaoResponse
@@ -17,6 +19,7 @@ import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
+import java.time.LocalDateTime
 import java.util.*
 import javax.inject.Inject
 
@@ -29,6 +32,9 @@ internal class RegistraChaveEndpointTest(
     @field:Inject
     lateinit var itauClient: ContasItauClient
 
+    @field:Inject
+    lateinit var bcbClient: BcbClient
+
     @Test
     fun `deve adicionar uma nova chave pix`() {
 
@@ -40,6 +46,29 @@ internal class RegistraChaveEndpointTest(
             .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
             .setValorDaChave("mentor@zup.com.br")
             .build()
+
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
 
         val responseItauClient = ContasItauResponse(
             TipoConta.CONTA_CORRENTE, "123", "123",
@@ -56,6 +85,11 @@ internal class RegistraChaveEndpointTest(
                 request.tipoContaMessage.name
             )
         ).thenReturn(HttpResponse.ok(responseItauClient))
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
+
 
         //Ação
         val response = grpcClient.registraChave(request)
@@ -78,6 +112,29 @@ internal class RegistraChaveEndpointTest(
             .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
             .build()
 
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.RANDOM, key = "",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.RANDOM, key = "bc35591d-b547-4151-a325-4a9d2cd19614",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
         val responseItauClient = ContasItauResponse(
             TipoConta.CONTA_CORRENTE, "123", "123",
             InstituicaoResponse("Itau", "789"),
@@ -91,6 +148,10 @@ internal class RegistraChaveEndpointTest(
             )
         ).thenReturn(HttpResponse.ok(responseItauClient))
 
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
+
         //Ação
         val response = grpcClient.registraChave(request)
 
@@ -98,6 +159,69 @@ internal class RegistraChaveEndpointTest(
         assertNotNull(response.pixId)
         assertTrue(repository.existsById(UUID.fromString(response.pixId)))
     }
+
+    @Test
+    fun `deve gerar uma exception ao tentar cadastrar uma chave pix sendo que a mesma nao foi cadastrada no bcb`() {
+
+        //Cenário
+        repository.deleteAll()
+        val request = RegistraChaveRequest.newBuilder()
+            .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
+            .setTipoChaveMessage(TipoChaveMessage.EMAIL)
+            .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+            .setValorDaChave("mentor@zup.com.br")
+            .build()
+
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
+        val responseItauClient = ContasItauResponse(
+            TipoConta.CONTA_CORRENTE, "123", "123",
+            InstituicaoResponse("Itau", "789"),
+            TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
+        )
+
+        Mockito.`when`(
+            itauClient.buscaContaPorClienteETipo(
+                request.identificadorCliente,
+                request.tipoContaMessage.name
+            )
+        ).thenReturn(HttpResponse.ok(responseItauClient))
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.badRequest())
+
+
+        //Ação
+       val erro = assertThrows(StatusRuntimeException::class.java){
+           grpcClient.registraChave(request)
+       }
+
+        //Verificação
+        assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
+    }
+
 
     @Test
     fun `deve gerar uma exception ao cadastar chave email incorreto`() {
@@ -115,6 +239,32 @@ internal class RegistraChaveEndpointTest(
             InstituicaoResponse("Itau", "789"),
             TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
         )
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.RANDOM, key = "",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.RANDOM, key = "bc35591d-b547-4151-a325-4a9d2cd19614",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
 
         Mockito.`when`(
             itauClient.buscaContaPorClienteETipo(
@@ -150,6 +300,34 @@ internal class RegistraChaveEndpointTest(
             TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
         )
 
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.RANDOM, key = "",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.RANDOM, key = "bc35591d-b547-4151-a325-4a9d2cd19614",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
+
+
         Mockito.`when`(
             itauClient.buscaContaPorClienteETipo(
                 request.identificadorCliente,
@@ -171,7 +349,7 @@ internal class RegistraChaveEndpointTest(
     fun `deve gerar uma exception ao cadastar chave repetida`() {
         //Cenário
         repository.deleteAll()
-        val dadosBancarios = DadosBancarios("1234", "1234","Itau","Rodrigo","12345467891")
+        val dadosBancarios = DadosBancarios("1234", "1234", "Itau", "Rodrigo", "12345467891")
         val chave = ChavePix(
             identificadorCliente = UUID.randomUUID(),
             tipoChave = TipoChave.EMAIL,
@@ -193,6 +371,34 @@ internal class RegistraChaveEndpointTest(
             InstituicaoResponse("Itau", "789"),
             TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
         )
+
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.RANDOM, key = "",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.RANDOM, key = "bc35591d-b547-4151-a325-4a9d2cd19614",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
+
 
         Mockito.`when`(
             itauClient.buscaContaPorClienteETipo(
@@ -228,6 +434,34 @@ internal class RegistraChaveEndpointTest(
             TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
         )
 
+        val requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.RANDOM, key = "",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        val responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.RANDOM, key = "bc35591d-b547-4151-a325-4a9d2cd19614",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
+
+
         Mockito.`when`(
             itauClient.buscaContaPorClienteETipo(
                 request.identificadorCliente,
@@ -249,5 +483,10 @@ internal class RegistraChaveEndpointTest(
     @MockBean(ContasItauClient::class)
     fun mockContasItauClient(): ContasItauClient {
         return Mockito.mock(ContasItauClient::class.java)
+    }
+
+    @MockBean(BcbClient::class)
+    fun mockBcbClient(): BcbClient {
+        return Mockito.mock((BcbClient::class.java))
     }
 }

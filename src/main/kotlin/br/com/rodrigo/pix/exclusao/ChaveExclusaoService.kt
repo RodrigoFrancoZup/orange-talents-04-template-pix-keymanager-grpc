@@ -32,6 +32,8 @@ class ChaveExclusaoService(
             //Verifica se conseguiu deletar a chave no BCB, se sim, podemos deletá-la do nosso Sistema.
             if (deletaResponse.code() == 200) {
                 repository.delete(possivelChave.get())
+            }else{
+                throw IllegalStateException("Erro ao apagar chave Pix no Banco Central do Brasil (BCB)")
             }
 
         } else {

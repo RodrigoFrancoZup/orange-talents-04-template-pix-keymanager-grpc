@@ -10,6 +10,7 @@ import br.com.rodrigo.util.exception.ChavePixExistenteException
 import io.micronaut.validation.Validated
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.transaction.Transactional
 import javax.validation.Valid
 
 @Validated
@@ -19,6 +20,7 @@ class ChavePixService(
     @Inject val client: ContasItauClient,
     @Inject val clientBcbClient: BcbClient
 ) {
+
 
     fun registra(@Valid chavePixDto: ChavePixDto):ChavePix{
 
@@ -47,6 +49,8 @@ class ChavePixService(
                 }
 
                 repository.save(chavePix)
+            }else{
+                throw IllegalStateException("Erro ao registrar chave Pix no Banco Central do Brasil (BCB)")
             }
 
         }else{

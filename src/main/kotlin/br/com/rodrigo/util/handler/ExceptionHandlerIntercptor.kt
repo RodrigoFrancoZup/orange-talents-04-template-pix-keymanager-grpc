@@ -80,14 +80,6 @@ class ExceptionHandlerIntercptor : MethodInterceptor<Any, Any> {
             val statusRuntimeException = StatusRuntimeException(status)
             val responseObserver = context.parameterValues[1] as StreamObserver<*>
             responseObserver.onError(statusRuntimeException)
-        }catch (e: IllegalAccessException) {
-            val status = Status.FAILED_PRECONDITION
-                .withCause(e)
-                .withDescription(e.message)
-
-            val statusRuntimeException = StatusRuntimeException(status)
-            val responseObserver = context.parameterValues[1] as StreamObserver<*>
-            responseObserver.onError(statusRuntimeException)
         }//Posso ir colocando mais Catch aqui
         return null
     }
