@@ -10,7 +10,6 @@ import "google/protobuf/timestamp.proto";
 
 service KeyManagerGrpcService  {
   rpc registraChave (RegistraChaveRequest) returns (RegistraChaveResponse) {}
-
 }
 
 service KeyManagerRemoveGrpcService{
@@ -19,6 +18,10 @@ service KeyManagerRemoveGrpcService{
 
 service KeyManagerConsultaGrpcService{
   rpc consultaChave (ConsultaChaveRequest) returns (ConsultaChaveResponse) {}
+}
+
+service KeyManagerListaChavesGrpcService{
+  rpc listaChaves (ListaChavesRequest) returns (ListaChavesResponse) {}
 }
 
 enum TipoChaveMessage{
@@ -34,6 +37,23 @@ enum TipoContaMessage{
   TIPO_CONTA_INDEFINIDO = 0;
   CONTA_CORRENTE = 1;
   CONTA_POUPANCA = 2;
+}
+
+message ListaChavesRequest{
+  string identificadorCliente = 1;
+}
+
+message ListaChavesResponse{
+  string identificadorCliente = 1;
+  repeated ChavePixMessage chaves = 2;
+}
+
+message ChavePixMessage{
+  string pixId = 1;
+  TipoChaveMessage tipoChaveMessage = 2;
+  string valor = 3;
+  TipoContaMessage tipoContaMessage = 4;
+  google.protobuf.Timestamp criadoEm = 5;
 }
 
 message ConsultaChaveRequest{

@@ -1,4 +1,4 @@
-package br.com.rodrigo.pix
+package br.com.rodrigo.pix.registra
 
 import br.com.rodrigo.KeyManagerGrpcServiceGrpc
 import br.com.rodrigo.KeyManagerRemoveGrpcServiceGrpc
