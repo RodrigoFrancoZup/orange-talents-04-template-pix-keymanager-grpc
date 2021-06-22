@@ -1,0 +1,96 @@
+Essa validação foi feito através do ENUM, pois dependendo do tipo de chave (CELULAR, EMAIL, CPF...) a validação será de um jeito. Outra coisa que vamos usar será a implementação do Bean Validation do Hibernates, por isso foi adicionado no arquivo build.gradle na seção dependencies:
+implementation("io.micronaut.beanvalidation:micronaut-hibernate-validator")
+implementation("org.hibernate:hibernate-validator:6.1.6.Final")
+
+Então na classe TipoChave cada valor implementará a função abstrata valida(). Essa função foi declarada na classe TipoChave. Veja como ficou a classe enum: 
+
+enum class TipoChave {
+
+    CPF {
+        override fun valida(chave: String?): Boolean {
+            if (chave.isNullOrBlank()) {
+                return false
+            }
+
+            if (!chave.matches("[0-9]+".toRegex())) {
+                return false
+            }
+
+            return CPFValidator().run {
+                initialize(null)
+                isValid(chave, null)
+            }
+        }
+    },
+    CELULAR {
+        override fun valida(chave: String?): Boolean {
+            if (chave.isNullOrBlank()) {
+                return false
+            }
+            return chave.matches("^\\+[1-9][0-9]\\d{1,14}\$".toRegex())
+        }
+    },
+    EMAIL {
+        override fun valida(chave: String?): Boolean {
+            if (chave.isNullOrBlank()) {
+                return false
+            }
+            return EmailValidator().run {
+                initialize(null)
+                isValid(chave, null)
+            }
+        }
+    },
+    ALEATORIA {
+        override fun valida(chave: String?) = chave.isNullOrBlank() // não deve se preenchida
+    };
+
+    abstract fun valida(chave: String?): Boolean
+}
+
+Veja que cada tipo usa a validação do BeanValidation (EmailValidator, CPFValidator). Essa validação vai retornar True ou False para a implementação da anotação @ValidPixKey que criamos.
+
+Com enum desse tipo foi possível criar a anotação @ValidPixKey, essa anotação ficou em cima da classe ChavePixDto (Assim quando passarmos esse valor para um serviço ele podera ser validado usando o @Valid).
+Toda anotação precisa de uma implementação, então criamos dentro da própria interface @ValidPixKey a sua implementação. Ambos ficaram assim:
+
+import javax.inject.Singleton
+import javax.validation.Constraint
+import javax.validation.Payload
+import kotlin.reflect.KClass
+import kotlin.annotation.AnnotationTarget.CLASS
+import kotlin.annotation.AnnotationTarget.TYPE
+
+@MustBeDocumented
+@Target(CLASS, TYPE)
+@Retention(AnnotationRetention.RUNTIME)
+@Constraint(validatedBy = [ValidPixKeyValidator::class])
+annotation class ValidPixKey(
+
+    val message: String = "chave Pix inválida (\${validatedValue.tipo})",
+    val groups: Array<KClass<Any>> = [],
+    val payload: Array<KClass<Payload>> = [],
+
+    )
+
+@Singleton
+class ValidPixKeyValidator: javax.validation.ConstraintValidator<ValidPixKey, ChavePixDto> {
+
+    override fun isValid(value: ChavePixDto?, context: javax.validation.ConstraintValidatorContext): Boolean {
+
+        // must be validated with @NotNull
+        if (value?.tipo == null) {
+            return true
+        }
+
+        val valid = value.tipo.valida(value.chave)
+        if (!valid) {
+            context.disableDefaultConstraintViolation()
+            context
+                .buildConstraintViolationWithTemplate(context.defaultConstraintMessageTemplate) // or "chave Pix inválida (${value.tipo})"
+                .addPropertyNode("chave").addConstraintViolation()
+        }
+
+        return valid
+    }
+}
+

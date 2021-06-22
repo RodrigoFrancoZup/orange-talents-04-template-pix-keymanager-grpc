@@ -1,0 +1,14 @@
+Ao consumir serviço do Itau teremo a resposta adicionada na classe ContaResponse só que essa classe tem relacionamento com outras classes, ou seja, teriamos que criar mais classes Responses, como elas só servem como casca, podemos criá-las dentro da mesma classe ConstaResponse, ficando assim:
+
+class ContaResponse(
+    val tipo: TipoConta,
+    val agencia: String,
+    val numero: String,
+    val instituicao: InstituicaoResponse,
+    val titular: TitularResponse
+) {
+}
+
+
+data class InstituicaoResponse(val nome: String, val ispb: String)
+data class TitularResponse(val id: UUID, val nome: String, val cpf: String)

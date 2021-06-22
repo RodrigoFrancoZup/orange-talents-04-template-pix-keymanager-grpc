@@ -1,0 +1,131 @@
+@Singleton
+class ChaveEndpoint(
+    @Inject val clientItau: ClientItau,
+    val repository: ChavePixRepository
+) :
+    KeyManagerGrpcServiceGrpc.KeyManagerGrpcServiceImplBase() {
+
+    override fun registrarChave(
+        request: RegistroChaveRequest,
+        responseObserver: StreamObserver<RegistroChaveResponse>
+    ) {
+
+        val identificadorClienteRequest = request.identificadorCliente
+        val tipoChaveRequest = request.tipoDeChave
+        val tipoContaRequest = request.tipoDeConta
+        var valorDaChaveRequest = request.valorDaChave
+
+        if (identificadorClienteRequest == null || identificadorClienteRequest.isBlank()) {
+            val e = Status.INVALID_ARGUMENT
+                .withDescription("Identificador do Cliente/Titular deve ser informado!")
+                .asRuntimeException()
+            responseObserver.onError(e)
+        }
+
+        if (tipoChaveRequest == null || tipoChaveRequest.equals(TipoDeChave.TIPO_CHAVE_INDEFINIDO)) {
+            val e = Status.INVALID_ARGUMENT
+                .withDescription("Tipo de chave não informada ou incorreta!")
+                .asRuntimeException()
+            responseObserver.onError(e)
+        }
+
+        if (tipoContaRequest == null || tipoContaRequest.equals(TipoDeConta.TIPO_CONTA_INDEFINIDO)) {
+            val e = Status.INVALID_ARGUMENT
+                .withDescription("Tipo de Conta não informado ou incorreto!")
+                .asRuntimeException()
+            responseObserver.onError(e)
+        }
+
+        if (tipoChaveRequest.equals(TipoDeChave.CPF)) {
+            if (!valorDaChaveRequest.matches("^[0-9]{11}$".toRegex())) {
+                val e = Status.INVALID_ARGUMENT
+                    .withDescription("CPF inválido!")
+                    .asRuntimeException()
+                responseObserver.onError(e)
+            }
+        }
+
+        if (tipoChaveRequest.equals(TipoDeChave.CELULAR)) {
+            if (!valorDaChaveRequest.matches("^\\+[1-9][0-9]\\d{1,14}\$".toRegex())) {
+                val e = Status.INVALID_ARGUMENT
+                    .withDescription("Celular inválido!")
+                    .asRuntimeException()
+                responseObserver.onError(e)
+            }
+        }
+
+        if (tipoChaveRequest.equals(TipoDeChave.EMAIL)) {
+            if (!valorDaChaveRequest.contains("@")) {
+                val e = Status.INVALID_ARGUMENT
+                    .withDescription("Email inválido!")
+                    .asRuntimeException()
+                responseObserver.onError(e)
+            }
+        }
+
+        try{
+           val contaResponse = clientItau.consultaPorTipoEIdentificador(identificadorClienteRequest,tipoContaRequest )
+        }catch (e : HttpException){
+            responseObserver?.onError(
+                Status.INTERNAL
+                    .withDescription(e.message)
+                    .withCause(e) // Esse é anexado ao Status, mas não é enviado ao Client
+                    .asRuntimeException()
+            )
+        }
+
+
+        val chavePix = request.toModel()
+        repository.save(chavePix)
+
+        val response = RegistroChaveResponse.newBuilder()
+            .setPixId(chavePix.id.toString())
+            .build()
+
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+}
+/*
+fun RegistroChaveRequest.toModel(): ChavePix {
+    var tipoChave = TipoChave.ALEATORIA
+    var tipoConta = TipoConta.CONTA_CORRENTE
+    var valor = this.valorDaChave
+
+
+    if (this.tipoDeChave.equals(TipoDeChave.ALEATORIA)) {
+        tipoChave = TipoChave.ALEATORIA
+        valor = UUID.randomUUID().toString()
+    }
+
+    if (this.tipoDeChave.equals(TipoDeChave.CELULAR)) {
+        tipoChave = TipoChave.CELULAR
+    }
+
+    if (this.tipoDeChave.equals(TipoDeChave.CPF)) {
+        tipoChave = TipoChave.CPF
+    }
+
+    if (this.tipoDeChave.equals(TipoDeChave.EMAIL)) {
+        tipoChave = TipoChave.EMAIL
+    }
+
+    if (this.tipoDeConta.equals(TipoDeConta.CONTA_CORRENTE)) {
+        tipoConta = TipoConta.CONTA_CORRENTE
+    }
+
+    if (this.tipoDeConta.equals(TipoDeConta.CONTA_POUPANCA)) {
+        tipoConta = TipoConta.CONTA_POUPANCA
+    }
+
+    val chavePix = ChavePix(
+        identificadorExterno = UUID.fromString(this.identificadorCliente),
+        tipoChave = tipoChave, tipoConta = tipoConta
+    )
+
+    chavePix.valor = valor
+
+    return chavePix
+}
+
+*/

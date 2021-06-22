@@ -1,0 +1,31 @@
+O teste de unidade visa testar a menor unidade de um sistema, ou seja, uma classe que tenha regra de negócios. No nosso sistema temos apenas uma classe que realiza operações (Get, Set e Construtor não contam) que é a classe TipoChave (ENUM), pois essa classe tem a função valida. Vamos testá-la.
+Para isso foi criado a classe internal class TipoChaveTest, podemos criá-la selecionando a classe Enum TipoChave e apertar "alt + insert" e criar Test.
+
+Veja como ficou a classe e o teste (coloquei duas maneiras de se escrever o teste):
+
+internal class TipoChaveTest() {
+
+    @Test
+    fun `deve aceitar a chave email com o valor correto`() {
+
+        val tipoChave = TipoChave.EMAIL
+        val validacao = tipoChave.valida("rodrigo@email.com.br")
+        assertTrue(validacao)
+
+    }
+
+    @Test
+    fun `deve aceitar a chave email com o valor correto teste de outra forma`() {
+
+       with(TipoChave.EMAIL){
+           assertTrue(valida("rodrigo@email.com.br"))
+       }
+
+    }
+
+    //Outros testes com os outros tipos de chaves!
+}
+
+Obs: Para cada chave foi feito um teste de valor correto, valor em branco, valor vazio e valor incorreto.
+
+

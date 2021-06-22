@@ -1,0 +1,63 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat{\fonttbl{\f0\fnil\fcharset0 Arial;}}
+{\*\generator Riched20 10.0.19041}\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\fs24\lang22 Para essa atividade devemos disponibilizar dois tipos de consulta de Chave Pix, a primeira ser\'e1 uma consulta na qual o usu\'e1rio informa o clienteId e a chaveId. A segunda consulta o usu\'e1rio informa apenas o valor da chave. Eu quando fiz essa tarefa sem ver a resolu\'e7\'e3o do mentor criei um endpoint para cada servi\'e7o, mas o mentor conseguiu fazer "dois servi\'e7os" em apenas um endpoint. Para isso ele utilizou o recurso oneOf do Protobuf e de classes Sealed do Kotlin. Veja como ele fez:\par
+\par
+Para realizar a consulta foi necess\'e1rio criar um novo servi\'e7o no arquivo .proto, ficando assim:\par
+\par
+
+\pard\box\brdrdash\brdrw0 \sa200\sl276\slmult1 service KeyManagerConsultaGrpcService\{\line   rpc consultaChave (ConsultaChaveRequest) returns (ConsultaChaveResponse) \{\}\line\}\par
+
+\pard\sa200\sl276\slmult1\par
+Os par\'e2metros:\par
+\par
+
+\pard\box\brdrdash\brdrw0 \sa200\sl276\slmult1 message ConsultaChaveRequest\{\line   message FiltroPorIds\{\line     string identificadorCliente = 1;\line     string pixId = 2;\line   \}\line   oneof filtro\{\line     FiltroPorIds filtroPorIds = 1;\line     string chave = 2;\line   \}\line\}\line\line message ConsultaChaveResponse\{\line   string identificadorCliente = 1;\line   string pixId = 2;\line   TipoChaveMessage tipoChaveMessage = 3;\line   string valorDaChave = 4;\line   TitularMessage titular = 5;\line   ContaMessage conta = 6;\line   google.protobuf.Timestamp criadoEm = 7;\line\}\par
+
+\pard\sa200\sl276\slmult1\par
+Lembre-se, tivemos que importar o tipo do Timestamp do Google:\par
+
+\pard\box\brdrdash\brdrw0 \sa200\sl276\slmult1 import "google/protobuf/timestamp.proto";\par
+
+\pard\sa200\sl276\slmult1\par
+Ao utilizar o oneof temos a certeza que apenas um dos campos ser\'e1 preenchido pelo usu\'e1rio! Ser\'e1 o oneof que nossa classa endpoint receber\'e1!\par
+Veja como o usu\'e1rio preencher\'e1 o BoomRPC:\par
+\par
+\{\par
+  "filtroPorIds": \{\par
+    "identificadorCliente": "bc35591d-b547-4151-a325-4a9d2cd19614",\par
+    "pixId": "e7c83efc-f056-4a52-970e-6465944e1836"\par
+  \},\par
+  "chave": null\par
+\}\par
+\par
+OU:\par
+\par
+\{\par
+  "filtroPorIds": null,\par
+  "chave": "1745e3d9-6a83-48c7-ac30-94defdc022a9"\par
+\}\par
+\par
+\par
+Vamos criar agora uma classe que ir\'e1 representar o oneof recebido, mas lembre-se que n\'e3o h\'e1 um padr\'e3o para representar essa classe, ent\'e3o vamos usar o recurso Sealed do Kotlin:\par
+\par
+
+\pard\box\brdrdash\brdrw0 \sa200\sl276\slmult1 @Introspected\line sealed class Filtro \{\line\line     \i /**\line      * Deve retornar chave encontrada ou lan\'e7ar um exce\'e7\'e3o de erro de chave n\'e3o encontrada\line      */\line     \i0 abstract fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo\line\line     @Introspected\line     data class PorFiltroIds(\line         @field:NotBlank @field:ValidUUID val clienteId: String,\line         @field:NotBlank @field:ValidUUID val pixId: String,\line     ) : Filtro() \{\line\line         override fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo \{\line             val possivelChavePix =\line                 repository.findByIdAndIdentificadorCliente(UUID.fromString(pixId), UUID.fromString(clienteId))\line             if (possivelChavePix.\i isPresent\i0 ) \{\line                 return ChavePixInfo.build(possivelChavePix.get())\line             \} else \{\line                 throw ChavePixInexistenteException("Chave Pix n\'e3o encontrada")\line             \}\line         \}\line     \}\line\line     @Introspected\line     data class PorChave(@field:NotBlank @Size(max = 77) val chave: String) : Filtro() \{\line\line         override fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo \{\line             val possivelChave = repository.findByChave(chave)\line             if (possivelChave.\i isPresent\i0 ) \{\line                 return ChavePixInfo.build(possivelChave.get())\line             \}\line             val responseBcb = bcbClient.busca(chave)\line             if(responseBcb.\i status\i0 .\i code \i0 == 200)\{\line                 return responseBcb.body().convertToChavePixInfo()\line             \}\line             throw ChavePixInexistenteException("Chave Pix n\'e3o encontrada")\line         \}\line     \}\line\line     @Introspected\line     class Invalido() : Filtro() \{\line         override fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo \{\line             throw IllegalArgumentException("Chave Pix inv\'e1lida ou n\'e3o informada")\line         \}\line     \}\line\}\line\par
+\par
+Uma classe sealed \'e9 como se fosse um ENUM de classes com mais recursos e heran\'e7a misturado. Foi declarado um metodo abstrato na classe Filtro que \'e9 sealed e por isso toda classe "filha" de Filtro ter\'e1 que implementar esse m\'e9todo. \par
+Criei 3 filhas, uma para quando o cliente utilizar a op\'e7\'e3o FiltroPorIds, outra para quando utilizar a op\'e7\'e3o CHAVE e a terceira para lan\'e7ar erro caso n\'e3o seja nenhuma das duas primeiras. (Lembre-se que FiltroPorIds e Chave s\'e3o opc\'e7\'f5es do servi\'e7o declarado no .proto)\par
+A classe filtro vai ganhar atrv\'e9s do construtor um repository e um cliente http, para assim poder fazer suas buscas.\par
+Cada classe filha recebe par\'e2metros diferentes e j\'e1 validados com anota\'e7\'f5es do Bean Validation.\par
+
+\pard\sa200\sl276\slmult1\par
+\par
+Na classe ConsultaChaveEndpoint vamos criar uma extension function para transformar a request em uma classe Filtro (j\'e1 estavamos usando essa logica antes). Dentro dessa classe atraves do filtroCase (campo dado pelo .proto) vamos saber qual dado o usu\'e1rio preencheu, o nome desse campo \'e9 sempre o NomeDadoAoOneof + Case. Sabendo qual dado ele preencheu vamos saber qual classe Filtro ser\'e1 usada (ter\'e1 que ser uma filha de Filtro).\par
+A implementa\'e7\'e3o ficou assim:\par
+\par
+
+\pard\box\brdrdash\brdrw0 \sa200\sl276\slmult1 @Singleton\line @ExceptionHandler\line class ConsultaChaveEndpoint(\line     @Inject private val repository: ChavePixRepository,\line     @Inject private val bcbClient: BcbClient,\line     @Inject private val validator: Validator,\line ) : KeyManagerConsultaGrpcServiceGrpc.KeyManagerConsultaGrpcServiceImplBase() \{\line\line     override fun consultaChave(\line         request: ConsultaChaveRequest,\line         responseObserver: StreamObserver<ConsultaChaveResponse>\line     ) \{\line\line         val filtro = request.\i toModel\i0 (validator)\line         val chavePixInfo = filtro.filtra(repository, bcbClient)\line\line         val contaMessage = ContaMessage.newBuilder()\line             .setInstituicao(chavePixInfo.dadosBancarios.instituicao)\line             .setAgencia(chavePixInfo.dadosBancarios.agencia)\line             .setNumero(chavePixInfo.dadosBancarios.numero)\line             .setTipoContaMessage(TipoContaMessage.valueOf(chavePixInfo.tipoConta.name))\line             .build()\line\line         val titular = TitularMessage.newBuilder()\line             .setCpf(chavePixInfo.dadosBancarios.cpf)\line             .setNome(chavePixInfo.dadosBancarios.titularNome)\line             .build()\line\line         //Peguei a data e horario que estava salvo, fiz ele virar Instante seguindo o UTC.\line         val registradaEm = chavePixInfo.registradaEm.atZone(ZoneId.of("UTC")).toInstant()\line\line         //Atraves de registradaEm vou gerar um Timestamp do google\line         val criadoEm = Timestamp.newBuilder()\line             .setNanos(registradaEm.\i nano\i0 )\line             .setSeconds(registradaEm.\i epochSecond\i0 )\line             .build()\line\line         val response = ConsultaChaveResponse.newBuilder()\line             .setIdentificadorCliente(chavePixInfo.clienteId.\i toString\i0 () ?: "")\line             .setPixId(chavePixInfo.pixId.\i toString\i0 () ?: "")\line             .setValorDaChave(chavePixInfo.chave)\line             .setTipoChaveMessage(TipoChaveMessage.valueOf(chavePixInfo.tipoChave.name))\line             .setConta(contaMessage)\line             .setCriadoEm(criadoEm)\line             .setTitular(titular)\line             .build()\line\line         responseObserver.onNext(response)\line         responseObserver.onCompleted()\line     \}\line\}\line\line fun ConsultaChaveRequest.toModel(validator: Validator): Filtro \{\line\line     //filtroCase \'e9 campo interno do oneof que usamos, atraves dele sabemos qual campo foi preenchido\line     val filtro = when (\i filtroCase\i0 !!) \{\line\line         //Verfificando se foi preenchido o FiltroPorIds\line         ConsultaChaveRequest.FiltroCase.\i FILTROPORIDS \i0 -> \i filtroPorIds\i0 .\i let \i0\{\line             Filtro.PorFiltroIds(clienteId = it.\i identificadorCliente\i0 , pixId = it.\i pixId\i0 )\line         \}\line\line         //Verfificando se foi preenchido o Chave\line         ConsultaChaveRequest.FiltroCase.\i CHAVE \i0 -> Filtro.PorChave(\i chave\i0 )\line\line         //Verfificando se nenhum foi preenchido\line         ConsultaChaveRequest.FiltroCase.\i FILTRO_NOT_SET \i0 -> Filtro.Invalido()\line     \}\line\line     //Validando o objeto filtro seguindo suas anota\'e7\'f5es do Bean Validation\line     val violations = validator.validate(filtro)\line     if (violations.\i isNotEmpty\i0 ()) \{\line         throw ConstraintViolationException(violations);\line     \}\line\line     return filtro\line\}\par
+
+\pard\sa200\sl276\slmult1\par
+\par
+\par
+}
+ 

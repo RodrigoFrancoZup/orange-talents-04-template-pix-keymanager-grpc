@@ -1,0 +1,172 @@
+Vamos agora ter que mudar o teste de adicção de chave e de remoção, pois agora nesse processo temos que consultar/consumir o serviço externo do banco centro do Brasil.
+Os testes dessas ações sem consumir o serviço do BCB já estavam funcionandos, então só vamos precisar "Mockar" o Client do BCB, e simular o mesmo executando o método de adição com sucesso e com erro, assim como executando o método de remoção com sucesso e erro.
+Nas classes de teste de adição e de remoção teremos que criar a "Fábrica de Mock do Client do BCB":
+
+@MockBean(BcbClient::class)
+fun mockBcbClient(): BcbClient {
+    return Mockito.mock((BcbClient::class.java))
+}
+
+E criar também o atributo:
+@field:Inject
+lateinit var bcbClient: BcbClient
+
+Veja como ficou um método de teste:
+@Test
+fun `deve adicionar uma nova chave pix`() {
+
+    //Cenário
+    repository.deleteAll()
+    val request = RegistraChaveRequest.newBuilder()
+        .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
+        .setTipoChaveMessage(TipoChaveMessage.EMAIL)
+        .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+        .setValorDaChave("mentor@zup.com.br")
+        .build()
+
+    val requestBcb = CreatePixKeyRequest(
+        keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+        bankAccount = BankAccount(
+            participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+            branch = "123",
+            accountNumber = "123",
+            accountType = AccountType.CACC
+        ),
+        owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+    )
+
+    val responseBcb = CreatePixKeyResponse(
+        keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+        bankAccount = BankAccount(
+            participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+            branch = "123",
+            accountNumber = "123",
+            accountType = AccountType.CACC
+        ),
+        owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+        createdAt = LocalDateTime.now()
+    )
+
+    val responseItauClient = ContasItauResponse(
+        TipoConta.CONTA_CORRENTE, "123", "123",
+        InstituicaoResponse("Itau", "789"),
+        TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
+    )
+
+    //Pense ao Mockar: ao executar o teste o programa está rodando de maneira "real", fora do ambiente de teste, quando for para fazer a busca no sistema itau,
+    // a execução será feita seguindo o código a seguir, logo o resultado será OK!
+    // está sendo simulado!
+    Mockito.`when`(
+        itauClient.buscaContaPorClienteETipo(
+            request.identificadorCliente,
+            request.tipoContaMessage.name
+        )
+    ).thenReturn(HttpResponse.ok(responseItauClient))
+
+    Mockito.`when`(
+        bcbClient.cadastra(requestBcb)
+    ).thenReturn(HttpResponse.created(responseBcb))
+
+
+    //Ação
+    val response = grpcClient.registraChave(request)
+
+    //Verificação
+    assertNotNull(response.pixId)
+    assertTrue(repository.existsByChave(request.valorDaChave))
+    assertTrue(repository.existsById(UUID.fromString(response.pixId)))
+
+}
+
+
+Quando no teste há trechos que se repetem, podemos isolá-los e uma função especial que é sempre executada antes do inicio de cada teste, ficando assim:
+
+@MicronautTest(transactional = false)
+internal class RegistraChaveEndpointTest(
+    val grpcClient: KeyManagerGrpcServiceGrpc.KeyManagerGrpcServiceBlockingStub,
+    val repository: ChavePixRepository
+) {
+
+    @field:Inject
+    lateinit var itauClient: ContasItauClient
+
+    @field:Inject
+    lateinit var bcbClient: BcbClient
+
+    lateinit var request: RegistraChaveRequest
+    lateinit var responseItauClient: ContasItauResponse
+    lateinit var requestBcb: CreatePixKeyRequest
+    lateinit var responseBcb: CreatePixKeyResponse
+
+    @BeforeEach
+    internal fun setUp(){
+        repository.deleteAll()
+        request = RegistraChaveRequest.newBuilder()
+            .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
+            .setTipoChaveMessage(TipoChaveMessage.EMAIL)
+            .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+            .setValorDaChave("mentor@zup.com.br")
+            .build()
+
+        requestBcb = CreatePixKeyRequest(
+            keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999")
+        )
+
+        responseBcb = CreatePixKeyResponse(
+            keyType = KeyType.EMAIL, key = "mentor@zup.com.br",
+            bankAccount = BankAccount(
+                participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                branch = "123",
+                accountNumber = "123",
+                accountType = AccountType.CACC
+            ),
+            owner = Owner(type = TypeOwner.NATURAL_PERSON, name = "Rodrigo", taxIdNumber = "99999999999"),
+            createdAt = LocalDateTime.now()
+        )
+
+         responseItauClient = ContasItauResponse(
+            TipoConta.CONTA_CORRENTE, "123", "123",
+            InstituicaoResponse("Itau", "789"),
+            TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
+        )
+    }
+
+    @Test
+    fun `deve adicionar uma nova chave pix`() {
+
+        //Cenário
+	//Ja é preparado pela função setUp @BeforeEach
+
+        //Pense ao Mockar: ao executar o teste o programa está rodando de maneira "real", fora do ambiente de teste, quando for para fazer a busca no sistema itau,
+        // a execução será feita seguindo o código a seguir, logo o resultado será OK!
+        // está sendo simulado!
+        Mockito.`when`(
+            itauClient.buscaContaPorClienteETipo(
+                request.identificadorCliente,
+                request.tipoContaMessage.name
+            )
+        ).thenReturn(HttpResponse.ok(responseItauClient))
+
+        Mockito.`when`(
+            bcbClient.cadastra(requestBcb)
+        ).thenReturn(HttpResponse.created(responseBcb))
+
+
+        //Ação
+        val response = grpcClient.registraChave(request)
+
+        //Verificação
+        assertNotNull(response.pixId)
+        assertTrue(repository.existsByChave(request.valorDaChave))
+        assertTrue(repository.existsById(UUID.fromString(response.pixId)))
+
+    }
+
+

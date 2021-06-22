@@ -1,0 +1,36 @@
+Na classe ChavePix há uma verfificaçao de regra de negocio, ha uma função que verifica se ao passar um clientId a chave pertence a esse clienteId informado. Vamos fazer um teste de unidade, para ve se está funcionando como esperado. Para isso criei a classe ChavePixTest. Veja como ela ficou:
+
+internal class ChavePixTest{
+
+    @Test
+    fun `deve retonrar true quando o cliente for dono da chave`(){
+
+        //Cenario
+        val clienteId = UUID.randomUUID()
+        val chavePix = ChavePix(clienteId, TipoChave.EMAIL, TipoConta.CONTA_CORRENTE, "rodrigo@gmail.com")
+
+        //Ação
+        val resultadoVerificacao = chavePix.verificaSeEhDono(clienteId)
+
+        //Verificação
+        assertTrue(resultadoVerificacao)
+
+    }
+
+    @Test
+    fun `deve retonrar false quando o cliente nao for dono da chave`(){
+
+        //Cenario
+        val clienteId = UUID.randomUUID()
+        val outroDono = UUID.randomUUID()
+        val chavePix = ChavePix(clienteId, TipoChave.EMAIL, TipoConta.CONTA_CORRENTE, "rodrigo@gmail.com")
+
+        //Ação
+        val resultadoVerificacao = chavePix.verificaSeEhDono(outroDono)
+
+        //Verificação
+        assertFalse(resultadoVerificacao)
+
+    }
+
+}

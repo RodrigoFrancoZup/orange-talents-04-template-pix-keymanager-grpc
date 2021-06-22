@@ -1,0 +1,17 @@
+Vamos precisar de um Client Http para consumir o serviço do Itau. Então criamos a interface ConsultaItauClient:
+
+@Client("\${itau.contas.url}")
+interface ContasItauClient {
+
+
+    @Get("/api/v1/clientes/{clienteId}/contas")
+    fun buscaContaPorClienteETipo(@PathVariable clienteId: String, @QueryValue tipo: String): HttpResponse<ContasItauResponse>
+}
+
+No @Client passamos como parâmetro a URI do serviço, poderia ser localhost:9090, ou outro endereço. No formato que está é porque usamos Váriavel de Ambiente, a variável itau.contas.url está no arquivo application.yml e lá demos um valor a ela, pois se um dia esse Host vier a mudar ficará mais fácil sua atualização. Veja como ficou:
+//No arquivo application.yml
+itau:
+  contas:
+    url: ${ITAU_URL:`http://localhost:9091`}
+
+Obs: Veja que no valor da váriavel também há:  ${ITAU_URL:, isso é um verficiador, se quem consumir passar a variável de ambiente ITAU_URL o valor será o passado pelo consumidor, já se ninguem passar nada o valor padrão será http://localhost:9091

@@ -1,0 +1,102 @@
+Para realizar a consulta foi necessário criar um novo serviço no arquivo .proto, ficando assim:
+
+service KeyManagerConsultaGrpcService{
+  rpc consultaChave (ConsultaChaveRequest) returns (ConsultaChaveResponse) {}
+}
+
+Criar os parâmetros do serviço, no caso ConsultaChaveRequest e ConsultaChaveResponse, ficando assim:
+message ConsultaChaveRequest{
+  string identificadorCliente = 1;
+  string pixId = 2;
+}
+
+message ConsultaChaveResponse{
+  string identificadorCliente = 1;
+  string pixId = 2;
+  TipoChaveMessage tipoChaveMessage = 3;
+  string valorDaChave = 4;
+  TitularMessage titular = 5;
+  ContaMessage conta = 6;
+  google.protobuf.Timestamp criadoEm = 7;
+}
+
+Note que em ConsultaChaveResponse há um parâmetro cujo tipo é google.protobuf.Timestamp, para podermos usar esse tipo foi necessário fazer seu import, no inicio do arquivo .proto (após o comando package):
+import "google/protobuf/timestamp.proto";
+
+Após isso, lembre-se de Buildar a aplicação!
+
+Veja como ficou a classe ConsultaChaveEndpoint, atente-se no modo de criar o Timestamp do google:
+
+@Singleton
+@ExceptionHandler
+class ConsultaChaveEndpoint(@Inject val consultaChaveService: ConsultaChaveService) : KeyManagerConsultaGrpcServiceGrpc.KeyManagerConsultaGrpcServiceImplBase() {
+
+    override fun consultaChave(
+        request: ConsultaChaveRequest,
+        responseObserver: StreamObserver<ConsultaChaveResponse>
+    ) {
+        val consultaChaveDto = request.toConsultaChaveDto(request)
+        val chavePix = consultaChaveService.consulta(consultaChaveDto)
+        val criadoEm = Timestamp.newBuilder()
+            .setSeconds(chavePix.criadaEm.atZone(ZoneId.of("UTC")).toInstant().epochSecond)
+            .setNanos(chavePix.criadaEm.atZone(ZoneId.of("UTC")).toInstant().nano)
+            .build()
+
+        val contaMessage = ContaMessage.newBuilder()
+            .setInstituicao(chavePix.dadosBancario.instituicao)
+            .setAgencia(chavePix.dadosBancario.agencia)
+            .setNumero(chavePix.dadosBancario.numero)
+            .setTipoContaMessage(TipoContaMessage.valueOf(chavePix.tipoConta.name))
+
+        val titularMessage = TitularMessage.newBuilder()
+            .setNome(chavePix.dadosBancario.titularNome)
+            .setCpf(chavePix.dadosBancario.cpf)
+
+        val response = ConsultaChaveResponse.newBuilder()
+            .setIdentificadorCliente(chavePix.identificadorCliente.toString())
+            .setPixId(chavePix.id.toString())
+            .setValorDaChave(chavePix.chave)
+            .setCriadoEm(criadoEm)
+            .setConta(contaMessage)
+            .setTitular(titularMessage)
+            .setTipoChaveMessage(TipoChaveMessage.valueOf(chavePix.tipoChave.name))
+            .build()
+
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+}
+
+fun ConsultaChaveRequest.toConsultaChaveDto(request: ConsultaChaveRequest): ConsultaChaveDto {
+    return ConsultaChaveDto(request.identificadorCliente, request.pixId)
+}
+
+Após isso, basta implementar a classe ConsultaChaveService, essa usará o Repository para buscar a chave e retonar a mesma.
+
+Atenção! O exercicio pedia dois tipos de consulta, uma consulta na qual o cliente informa o ID da chave e o ID do dono da chave (foi o que implementei até o momento). A outra busca seria feita com apenas o valor da chave, ou seja, o cliente informaria apenas o valor da chave. Eu planejava fazer outro service para isso, ou seja, criar no .proto outro serviço para esse tipo de busca, mas o mentor do curso mostrou como fazer duas buscas usando apenas um serviço, no caso ele usou o recurso de oneOf do Protobuf e também o recurso de calsses do tipo saled do Kotlin. Vou resolver esse problema da mesma maneira, ver o arquivo Consulta2 para entender como fazer!
+
+Classe service que não vou usar mais do modo proposto pelo mentor:
+
+@Validated
+@Singleton
+class ConsultaChaveService(
+    val repository: ChavePixRepository,
+    val bcbClient: BcbClient
+) {
+
+    fun consulta(@Valid consultaChaveDto: ConsultaChaveDto): ChavePix {
+
+       val possivelChave =  repository.findByIdAndIdentificadorCliente(UUID.fromString(consultaChaveDto.chaveId),UUID.fromString(consultaChaveDto.clienteId))
+        if(possivelChave.isPresent){
+            val pixKeyDetailsResponse = bcbClient.busca(possivelChave.get().chave)
+            if(pixKeyDetailsResponse.status.code == 200){
+                return possivelChave.get()
+            }else{
+                throw ChavePixInexistenteException("Chave pix não cadastrada no BCB!")
+            }
+        }else{
+            throw ChavePixInexistenteException("Chave pix não cadastrada no Itau!")
+        }
+    }
+}
+

@@ -1,0 +1,130 @@
+Vamos agora consumir o sistema do Banco Central Brasileiro, para cadastrar e remover uma chave pix. Esse serviço está rodando em http://localhost:8082.
+
+O primeiro passo será colocar esse endereço no arquivo application.yml e usá-lo através de variável de ambiente. Ficando assim: 
+bcb:
+  chaves:
+      url: ${BCB_URL:`http://localhost:8082`}
+
+O serviço do Banco Central utiliza XML, então vamos ter que pro uma dependencia para fazer essa serializacao. No arquivo Build.Gradle na seção dependencies adicionar: 
+	implementation("io.micronaut.xml:micronaut-jackson-xml")
+
+
+O segundo passo será criar um Client http, por isso vamos criar a Interface BcbClient, e ficará assim:
+@Client("\${bcb.chaves.url}")
+interface BcbClient {
+    
+}
+
+Dentro dessa interface haverá as funções que vão bater em algun endpoint do BCB utilizando algum verbo do HTPP. Veja como ficou essa interface completa:
+
+@Client("\${bcb.chaves.url}")
+interface BcbClient {
+
+    @Post("/api/v1/pix/keys")
+    @Consumes(MediaType.APPLICATION_XML)
+    @Produces(MediaType.APPLICATION_XML)
+    fun cadastra(@Body createPixKeyRequest: CreatePixKeyRequest): HttpResponse<CreatePixKeyResponse>
+
+    @Delete("/api/v1/pix/keys/{key}")
+    @Consumes(MediaType.APPLICATION_XML)
+    @Produces(MediaType.APPLICATION_XML)
+    fun deleta(@PathVariable key: String, @Body request: DeletePixKeyRequest) : HttpResponse<DeletePixKeyResponse>
+
+}
+
+Esses dois serviços precisam de classes Request e Respose, logo elas foram criadas. A unica classe desse tipo mais complexa foi CreatePixKeyRequest, pois vamos ter que transformar o objeto ChavePix em CreatePixKeyRequest. Ela ficou assim:
+
+data class CreatePixKeyRequest(
+    val keyType: KeyType,
+    val key: String,
+    val bankAccount: BankAccount,
+    val owner: Owner
+) {
+
+    companion object {
+
+        fun build(chave: ChavePix): CreatePixKeyRequest {
+
+            val accountType: AccountType
+            val keyType: KeyType
+
+            when (chave.tipoConta) {
+                TipoConta.CONTA_CORRENTE -> accountType = AccountType.CACC
+                else -> accountType = AccountType.SVGS
+            }
+
+            when (chave.tipoChave) {
+                TipoChave.EMAIL -> keyType = KeyType.EMAIL
+                TipoChave.CPF -> keyType = KeyType.CPF
+                TipoChave.CELULAR -> keyType = KeyType.PHONE
+                TipoChave.ALEATORIA -> keyType = KeyType.RANDOM
+                else -> throw RuntimeException("Falha ao converter TipoChave para KeyType")
+            }
+
+            return CreatePixKeyRequest(
+                key = chave.chave,
+                bankAccount = BankAccount(
+                    participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
+                    branch = chave.dadosBancario.agencia, accountNumber = chave.dadosBancario.numero,
+                    accountType = accountType
+                ),
+                owner = Owner(
+                    type = TypeOwner.NATURAL_PERSON,
+                    name = chave.dadosBancario.titularNome,
+                    taxIdNumber = chave.dadosBancario.cpf
+                ),
+                keyType = keyType
+            )
+        }
+    }
+}
+
+Agora na classes ChaveExclusaoService e ChaveService vamos consumir o serviço do BCB, daí se a resposta for OK vamos dar continuidade com o serviço que irá afetar o nosso sistema! Ou seja, primeiro tem que ser feito no BCB, se der certo eu continuo na nossa API.
+
+Veja o exemplo ao cadastrar uma chave:
+
+@Validated
+@Singleton
+class ChavePixService(
+    @Inject val repository: ChavePixRepository,
+    @Inject val client: ContasItauClient,
+    @Inject val clientBcbClient: BcbClient
+) {
+
+    fun registra(@Valid chavePixDto: ChavePixDto):ChavePix{
+
+         val chavePix: ChavePix
+
+        // Verifica se chave já existe/já é usada
+        if(repository.existsByChave(chavePixDto.chave)){
+            throw  ChavePixExistenteException("A chave ${chavePixDto.chave} já está cadastrada!")
+        }
+
+        //Consultando o serviço do Itau para ver se o clienteId informado tem de fato a conta
+        val contaItauResponse = client.buscaContaPorClienteETipo(chavePixDto.clienteId, chavePixDto.tipoConta.toString())
+
+        //Se a consulta ao serviço Itau confirmou que há conta, podemos salvar
+        if(contaItauResponse.body.isPresent){
+            val body = contaItauResponse.body
+            chavePix = chavePixDto.toModel(body.get().toDadosBancarios())
+
+            //Cadastrando no BCB
+            val responseBcb = clientBcbClient.cadastra(CreatePixKeyRequest.build(chavePix))
+
+            //Verifica se conseguiu salvar a chave no BCB
+            if(responseBcb.code() == 201){
+                if(responseBcb.body().keyType == KeyType.RANDOM){
+                    chavePix.atualizaChaveAleatoriaBcb(responseBcb.body().key)
+                }
+
+                repository.save(chavePix)
+            }
+
+        }else{
+            throw IllegalStateException("Cliente não encontrado no Itau")
+        }
+
+        return chavePix
+    }
+}
+

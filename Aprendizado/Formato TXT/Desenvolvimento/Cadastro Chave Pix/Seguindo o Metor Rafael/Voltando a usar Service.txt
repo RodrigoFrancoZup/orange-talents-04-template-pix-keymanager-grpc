@@ -1,0 +1,44 @@
+Vamos voltar a usar classes do tipo Service para organizar melhor o código. Nela vamos persistir a entidade no banco e utilizar o serviço do Itau para. Outra vantagem será que na classe tipo Service vamos receber o objeto DTO, no caso ChavePixDto e assim poderemos usar a anotação @Valid no parâmetro e assim validá-los.
+
+Vamos criar a classe  ChavePixService, essa será anotado com @Validated e @Singleton, a primeira é para indicar que haverá Validação do Bean Validation nessa clase e o segundo para o objeto de ChavePixService ser um bean do Micronaut.
+
+Nessa classe vamos utilizar o ChavePixRepository para persistir um objeto desse tipo e também usaremos o Client Http que consumirá serviço do Itau, logo teremos que receber esses dois no construtor da classe ChavePixService. Sua assinatura ficará assim:
+
+@Validated
+@Singleton
+class ChavePixService(
+    @Inject val repository: ChavePixRepository,
+    @Inject val client: ContasItauClient
+) {
+}
+
+Veja como ficou a classe ChavePixService:
+
+@Validated
+@Singleton
+class ChavePixService(
+    @Inject val repository: ChavePixRepository,
+    @Inject val client: ContasItauClient
+) {
+    
+    fun registra(@Valid chavePixDto: ChavePixDto):ChavePix{
+
+        var chavePix: ChavePix? = null
+
+        // Verifica se chave já existe/já é usada
+        if(repository.existsByChave(chavePixDto.chave)){
+            throw  ChavePixExistenteException("A chave ${chavePixDto.chave} já está cadastrada!")
+        }
+
+        //Consultando o serviço do Itau para ver se o clienteId informado tem de fato a conta
+        val contaItauResponse = client.buscaContaPorClienteETipo(chavePixDto.clienteId, chavePixDto.tipoConta.toString())
+
+        //Se a consulta ao serviço Itau confirmou que há conta, podemos salvar
+        if(contaItauResponse.body.isPresent){
+            chavePix = chavePixDto.toModel()
+            repository.save(chavePix)
+        }
+
+        return chavePix!!
+    }
+}

@@ -1,0 +1,20 @@
+O primeiro passo para remover a chave é criar um serviço para isso no arquivo .proto. Lá eu criei:
+
+service KeyManagerRemoveGrpcService{
+  rpc removeChave (RemoveChaveRequest) returns (RegistraChaveResponse) {}
+}
+
+Alem disso tive que criar a message para representar RemoveChaveRequest, ficando assim:
+
+message RemoveChaveRequest{
+  string identificadorCliente = 1;
+  string pixId = 2;
+}
+
+Após isso temos que compilar novamente o arquivo .proto.
+
+Com a compilação concluída vou isolar todo o código de exclusão na pasta chamada exclusao. Nesta pasta vou criar uma classe ExclusaoChaveDto, ChaveExclusaoService e ExclusaoChaveEndpoint.
+
+Na classe ExclusaoChaveEndpoint vou criar uma Extension Function para transformar a request em ExclusaoChaveDto. Tendo um objeto de ExclusaoChaveDto vou enviá-lo (chamar)  o método remove() da classe ChaveExclusaoService, fazer as validações necessárias e excluir a chave.
+
+

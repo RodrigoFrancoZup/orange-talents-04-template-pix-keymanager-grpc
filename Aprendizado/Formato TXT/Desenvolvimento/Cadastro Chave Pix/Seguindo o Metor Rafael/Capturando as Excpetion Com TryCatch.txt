@@ -1,0 +1,31 @@
+Ao fazer validações quando a mesma falha uma Exception é lançada, como vamos fazer a mensagem chegar ao usuário? Também criamos algumas exceptions próprias, por exemplo ChavePixExistenteException. Como vamos retornar a mensagem dessa exception para o  Usuário? Uma alternativa é o Try{}Catch{}.
+
+Sabemos que a Exception lançada quando a validação falha é do tipo ConstraintViolationExcpetion. Então podemos na classe Controller/Endpoint, no nosso caso a classe será RegistraChaveEndpoint fazer o seguinte try/catch:
+
+try {
+    val chavePixDto = request.toChavePixDto()
+    val chavePix = chavePixService.registra(chavePixDto)
+
+    val response = RegistraChaveResponse.newBuilder()
+        .setPixId(chavePix.id.toString())
+        .build()
+
+    responseObserver.onNext(response)
+    responseObserver.onCompleted()
+} catch (e: ConstraintViolationException) {
+
+    val status = Status.INVALID_ARGUMENT
+        .withCause(e)
+        .withDescription(e.message)
+
+    val statusRuntimeException = StatusRuntimeException(status)
+    responseObserver.onError(statusRuntimeException)
+}
+
+Pontos Importantes:
+1) Estamos pegando no catch a mesma exceção que sabemos que é lançada quando a validação falha;
+2) Se retornarmos essa exceção para um cliente gRPC ele não será informado de nada, pois ele só entende exceções do tipo StatusRuntimeException ou StatusException;
+3) Criamos uma variável chamada de status e nela colocamos um código de satus, o motivo da falha e sua mensagem, esses dois últimos valores valores são da ConstraintViolationException;
+4) Por fim pegamos essa variável status e a transformamos em StatusRuntimeException e assim a retornamos ao cliente!
+
+O próximo passo será criar uma ExcpetionHandler, com isso vamos retirar esse try/catch do código e isolar nessa classe que saberá capturar diversas Exceptions!

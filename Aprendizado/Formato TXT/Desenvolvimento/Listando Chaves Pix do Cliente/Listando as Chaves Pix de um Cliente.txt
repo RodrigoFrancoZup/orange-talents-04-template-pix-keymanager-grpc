@@ -1,0 +1,80 @@
+Vamos agora implementar o serviço que irá listar todas as chaves de um cliente. Essa consultá só será feita no nosso sitema e para isso o cliente terá que informar o seu id.
+Como se trata de um novo serviço, teremos que criá-lo no arquivo .proto
+
+service KeyManagerListaChavesGrpcService{
+  rpc listaChaves (ListaChavesRequest) returns (ListaChavesResponse) {}
+}
+
+message ListaChavesRequest{
+  string identificadorCliente = 1;
+}
+
+message ListaChavesResponse{
+  string identificadorCliente = 1;
+  repeated ChavePixMessage chaves = 2;
+}
+
+message ChavePixMessage{
+  string pixId = 1;
+  TipoChaveMessage tipoChaveMessage = 2;
+  string valor = 3;
+  TipoContaMessage tipoContaMessage = 4;
+  google.protobuf.Timestamp criadoEm = 5;
+}
+
+Veja que a Response desse serviço tem um atributo do tipo repeated, ou seja, é uma lista. Uma lista que nomeamos de chave e que terá elementos do tipo ChavePixMessage. Por isso tivemos que também descrever a message do tipo ChavePixMessage. Lembre-se, após alterar o arquivo .proto devemos buildar novamente o projeto!
+
+Veja como ficou a classe ListaChaveEndpoint:
+@Singleton
+@ExceptionHandler
+class ListaChaveEndpoint(@Inject val service: ListaChaveService) :
+    KeyManagerListaChavesGrpcServiceGrpc.KeyManagerListaChavesGrpcServiceImplBase() {
+
+    override fun listaChaves(request: ListaChavesRequest, responseObserver: StreamObserver<ListaChavesResponse>) {
+
+        val chavePixList = service.listaChave(request.identificadorCliente)
+
+        //Pegando cada chavePix da lista chavePixList,
+        // criando uma ChavePixMessage com os dados da chavePix e
+        // armazenando-as na lista chaves, que é uma lista de ChavePixMessage
+        // essa lista será colocada no Objeto ListaChavesResponse
+        val chaves = chavePixList.map {
+            ChavePixMessage.newBuilder()
+                .setPixId(it.id.toString())
+                .setTipoChaveMessage(TipoChaveMessage.valueOf(it.tipoChave.name))
+                .setValor(it.chave)
+                .setTipoContaMessage(TipoContaMessage.valueOf(it.tipoConta.name))
+                .setCriadoEm(it.criadaEm.let {
+                    val dataCriacao = it.atZone(ZoneId.of("UTC")).toInstant()
+                    Timestamp.newBuilder()
+                        .setSeconds(dataCriacao.epochSecond)
+                        .setNanos(dataCriacao.nano)
+                        .build()
+                })
+                .build()
+        }
+
+        val response = ListaChavesResponse.newBuilder()
+            .setIdentificadorCliente(request.identificadorCliente)
+            .addAllChaves(chaves)
+            .build()
+
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+}
+
+Veja a classe ListaChaveService:
+
+@Validated
+@Singleton
+class ListaChaveService(
+    @Inject val repository: ChavePixRepository
+) {
+
+    fun listaChave(@NotBlank @ValidUUID clientId: String): List<ChavePix> {
+
+        return repository.findByIdentificadorCliente(UUID.fromString(clientId))
+    }
+}
+

@@ -1,0 +1,103 @@
+Vamos testar agora o serviço registraChave (que encontra-se na classe RegistraChaveEndpoint).
+
+O jeito mais fácil para criar a classe seguindo os mesmos pacotes é selecionar a classe RegistraChaveEndpoint e apaertar "alt+enter" e pedir para gerar o teste com Junit5.
+Assim a classe RegistraChaveEndpointTest é criada, vamos anotá-la com @MicronautTest
+
+Para realizar os testes vamos precisar de um Client gRPC, mas o micronaut para injetar um client gRPC precisa ter uma fábrica do cliente. Então vamos criar no pacote test/pix a classe:
+
+@Factory
+class ClientGrpcFactory {
+
+    @Singleton
+    fun blockingStub(@GrpcChannel(GrpcServerChannel.NAME) channel: ManagedChannel): KeyManagerGrpcServiceGrpc.KeyManagerGrpcServiceBlockingStub? {
+        return KeyManagerGrpcServiceGrpc.newBlockingStub(channel)
+
+    }
+}
+
+Agora na classe RegistraChaveEndpointTest  poderemos criar um client gRPC, ficando assim:
+
+@MicronautTest
+internal class RegistraChaveEndpointTest(
+     val grpcClient:  KeyManagerGrpcServiceGrpc.KeyManagerGrpcServiceBlockingStub,
+     val repository: ChavePixRepository
+)
+
+O primeiro teste está pronto, veja como ficou a função (essa vai dentro da função descrita anteriormente):
+
+@Test
+fun `deve adicionar uma nova chave pix`() {
+
+    //Cenário
+    repository.deleteAll()
+    val request = RegistraChaveRequest.newBuilder()
+        .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
+        .setTipoChaveMessage(TipoChaveMessage.EMAIL)
+        .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+        .setValorDaChave("mentor@zup.com.br")
+        .build()
+
+    //Ação
+    val response = grpcClient.registraChave(request)
+
+    //Verificação
+    assertNotNull(response.pixId)
+    assertTrue(repository.existsByChave(request.valorDaChave))
+    assertTrue(repository.existsById(UUID.fromString(response.pixId)))
+
+}
+
+ATENÇÃO: O teste feito está funcionando, mas só tem um problema. Do jeito que está a consulta ao banco Itau está sendo feita, pois o serviço registraChave() faz essa consulta, logo se o serviço do banco Itau parar de funcionar nosso teste vai quebrar e não é de nossa responsabilidade a funcionalidade de um serviço externo. Queremos testar somente os nossos recursos. Então vou reescrever o código "Mockando" esssa consulta ao Banco itáu, vou simular!
+Para Mockar um objeto temos que fazer:
+1)criar uma variável que será do tipo do objeto a ser mockado. Essa variável será anotada com @field:Inject e deve ser latinit, ficando assim:
+	@field:Inject
+lateinit var itauClient: ContasItauClient
+
+2)adicionar no arquivo build.gradle na seção dependencies a dependencia:testImplementation("org.mockito:mockito-core:3.8.0");
+3) também criar uma funçao anotada com @MockBean para ser uma especia de fábrica/factory do Mock, então dentro da classe RegistraChaveEndpointTest vou criar a função: 
+@MockBean(ContasItauClient::class)
+fun mockContasItauClient(): ContasItauClient {
+    return Mockito.mock(ContasItauClient::class.java)
+}
+4) Ao executar o método do Bean Mockado eu terei também que simular os parâmetros e resultado, ou seja, dependendo do tipo eu terei que criar Objetos para ir como pâmetro e objeto de retorno. Nesse caso eu enviei os dados da request (tipo conta e chave do cliente) e a respsota eu gerei com dados aleatórios, pois eu não vou usá-los no teste, o importante para mim é o Status OK para dar continuidade na requisição e ver se de fato está salvando a chave pix.
+
+O teste com mock ficou assim:
+
+@Test
+fun `deve adicionar uma nova chave pix`() {
+
+    //Cenário
+    repository.deleteAll()
+    val request = RegistraChaveRequest.newBuilder()
+        .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
+        .setTipoChaveMessage(TipoChaveMessage.EMAIL)
+        .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+        .setValorDaChave("mentor@zup.com.br")
+        .build()
+
+    val responseItauClient = ContasItauResponse(
+        TipoConta.CONTA_CORRENTE, "123", "123",
+        InstituicaoResponse("Itau", "789"),
+        TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
+    )
+
+    Mockito.`when`(
+        itauClient.buscaContaPorClienteETipo(
+            request.identificadorCliente,
+            request.tipoContaMessage.name
+        )
+    ).thenReturn(HttpResponse.ok(responseItauClient))
+    //Ação
+
+    val response = grpcClient.registraChave(request)
+
+    //Verificação
+    assertNotNull(response.pixId)
+    assertTrue(repository.existsByChave(request.valorDaChave))
+    assertTrue(repository.existsById(UUID.fromString(response.pixId)))
+
+}
+
+Obs: Em teste de gRPC é bom desligar a transação com: @MicronautTest(transactional = false)
+Principalmente quando adicionarmos algo no banco para depois testar
+

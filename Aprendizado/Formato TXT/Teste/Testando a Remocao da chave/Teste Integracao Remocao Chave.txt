@@ -1,0 +1,187 @@
+Antes de tudo, foi preciso criar uma fábrica (Factory) de Client gRPC para o serviço KeyManagerRemoveGrpcService, ficando assim:
+
+@Factory
+class ClientGrpcFactory {
+
+    @Singleton
+    fun blockingStub(@GrpcChannel(GrpcServerChannel.NAME) channel: ManagedChannel): KeyManagerRemoveGrpcServiceGrpc.KeyManagerRemoveGrpcServiceBlockingStub? {
+        return KeyManagerRemoveGrpcServiceGrpc.newBlockingStub(channel)
+    }
+}
+
+Após isso criei a classe 
+@MicronautTest(transactional = false)
+internal class ExclusaoChaveEndpointTest(
+    val grpcClient: KeyManagerRemoveGrpcServiceGrpc.KeyManagerRemoveGrpcServiceBlockingStub,
+    val repository: ChavePixRepository
+)
+ E nela terá funções para testar uma deleção com sucesso, uma deleção que não encontra a chave logo retorna exception, tentativa de deleção de chave que não lhe pertence que também retornará valor errado, deleção sem informar o id do cliente, deleção sem passar o valor da chave. Veja como ficou a classe:
+
+
+@MicronautTest(transactional = false)
+internal class ExclusaoChaveEndpointTest(
+    val grpcClient: KeyManagerRemoveGrpcServiceGrpc.KeyManagerRemoveGrpcServiceBlockingStub,
+    val repository: ChavePixRepository
+) {
+
+    @Test
+    fun `deve remover uma chave pix`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val clienteId = UUID.randomUUID()
+        val chavePix = ChavePix(clienteId, TipoChave.EMAIL, TipoConta.CONTA_CORRENTE, "rodrigo@zup.com.br")
+        repository.save(chavePix)
+
+        val request = RemoveChaveRequest.newBuilder()
+            .setIdentificadorCliente(clienteId.toString())
+            .setPixId(chavePix.id.toString())
+            .build()
+
+        //VERIFICACAO COM AÇÃO
+        assertTrue(repository.existsByChave(chavePix.chave))
+        assertTrue(repository.existsById(chavePix.id))
+        grpcClient.removeChave(request)
+
+        //VERIFICAÇAO
+        assertFalse(repository.existsByChave(chavePix.chave))
+        assertFalse(repository.existsById(chavePix.id))
+    }
+
+    @Test
+    fun `deve ser lancada uma exception ao tentar remover uma chave inexistente`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val request = RemoveChaveRequest.newBuilder()
+            .setIdentificadorCliente(UUID.randomUUID().toString())
+            .setPixId(UUID.randomUUID().toString())
+            .build()
+
+        //AÇÃO
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.removeChave(request)
+        }
+
+        //VERIFICAO
+        assertEquals(Status.NOT_FOUND.code, erro.status.code)
+    }
+
+    @Test
+    fun `deve ser lancada uma exception quando um usuario tentar remover uma chave que nao seja sua`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val cliente1 = UUID.randomUUID()
+        val cliente2 = UUID.randomUUID()
+        val chavePix = ChavePix(cliente1,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        repository.save(chavePix)
+
+        val request = RemoveChaveRequest.newBuilder()
+            .setIdentificadorCliente(cliente2.toString())
+            .setPixId(chavePix.id.toString())
+            .build()
+
+        //AÇÃO
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.removeChave(request)
+        }
+
+        //VERIFICAO
+        assertEquals(Status.FAILED_PRECONDITION.code, erro.status.code)
+    }
+
+    @Test
+    fun `deve ser lancada uma exception ao tentar remover chave sem passar seu valor`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val cliente = UUID.randomUUID()
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        repository.save(chavePix)
+
+        val request = RemoveChaveRequest.newBuilder()
+            .setIdentificadorCliente(cliente.toString())
+            .build()
+
+        //AÇÃO
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.removeChave(request)
+        }
+
+        //VERIFICAO
+        assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
+    }
+
+    @Test
+    fun `deve ser lancada uma exception ao tentar remover chave sem passar cliente id`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val cliente = UUID.randomUUID()
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        repository.save(chavePix)
+
+        val request = RemoveChaveRequest.newBuilder()
+            .setPixId(chavePix.id.toString())
+            .build()
+
+        //AÇÃO
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.removeChave(request)
+        }
+
+        //VERIFICAO
+        assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
+    }
+
+    @Test
+    fun `deve ser lancada uma exception se id do cliente nao for padrao uuid`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val cliente = UUID.randomUUID()
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        repository.save(chavePix)
+
+        val request = RemoveChaveRequest.newBuilder()
+            .setIdentificadorCliente("123456")
+            .setPixId(chavePix.id.toString())
+            .build()
+
+        //AÇÃO
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.removeChave(request)
+        }
+
+        //VERIFICAO
+        assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
+    }
+
+    @Test
+    fun `deve ser lancada uma exception se id da chave nao for padrao uuid`() {
+
+        //CENARIO
+        repository.deleteAll()
+        val cliente = UUID.randomUUID()
+        val chavePix = ChavePix(cliente,TipoChave.EMAIL,TipoConta.CONTA_CORRENTE,"rodrigo@gmail.com")
+        repository.save(chavePix)
+
+        val request = RemoveChaveRequest.newBuilder()
+            .setIdentificadorCliente(cliente.toString())
+            .setPixId("123456")
+            .build()
+
+        //AÇÃO
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.removeChave(request)
+        }
+
+        //VERIFICAO
+        assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
+    }
+
+}
+
+
+

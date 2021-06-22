@@ -1,0 +1,193 @@
+Para essa atividade devemos disponibilizar dois tipos de consulta de Chave Pix, a primeira será uma consulta na qual o usuário informa o clienteId e a chaveId. A segunda consulta o usuário informa apenas o valor da chave. Eu quando fiz essa tarefa sem ver a resolução do mentor criei um endpoint para cada serviço, mas o mentor conseguiu fazer "dois serviços" em apenas um endpoint. Para isso ele utilizou o recurso oneOf do Protobuf e de classes Sealed do Kotlin. Veja como ele fez:
+
+Para realizar a consulta foi necessário criar um novo serviço no arquivo .proto, ficando assim:
+
+service KeyManagerConsultaGrpcService{
+  rpc consultaChave (ConsultaChaveRequest) returns (ConsultaChaveResponse) {}
+}
+
+Os parâmetros:
+
+message ConsultaChaveRequest{
+  message FiltroPorIds{
+    string identificadorCliente = 1;
+    string pixId = 2;
+  }
+  oneof filtro{
+    FiltroPorIds filtroPorIds = 1;
+    string chave = 2;
+  }
+}
+
+message ConsultaChaveResponse{
+  string identificadorCliente = 1;
+  string pixId = 2;
+  TipoChaveMessage tipoChaveMessage = 3;
+  string valorDaChave = 4;
+  TitularMessage titular = 5;
+  ContaMessage conta = 6;
+  google.protobuf.Timestamp criadoEm = 7;
+}
+
+Lembre-se, tivemos que importar o tipo do Timestamp do Google:
+import "google/protobuf/timestamp.proto";
+
+Ao utilizar o oneof temos a certeza que apenas um dos campos será preenchido pelo usuário! Será o oneof que nossa classa endpoint receberá!
+Veja como o usuário preencherá o BoomRPC:
+
+{
+  "filtroPorIds": {
+    "identificadorCliente": "bc35591d-b547-4151-a325-4a9d2cd19614",
+    "pixId": "e7c83efc-f056-4a52-970e-6465944e1836"
+  },
+  "chave": null
+}
+
+OU:
+
+{
+  "filtroPorIds": null,
+  "chave": "1745e3d9-6a83-48c7-ac30-94defdc022a9"
+}
+
+
+Vamos criar agora uma classe que irá representar o oneof recebido, mas lembre-se que não há um padrão para representar essa classe, então vamos usar o recurso Sealed do Kotlin:
+
+@Introspected
+sealed class Filtro {
+
+    /**
+     * Deve retornar chave encontrada ou lançar um exceção de erro de chave não encontrada
+     */
+    abstract fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo
+
+    @Introspected
+    data class PorFiltroIds(
+        @field:NotBlank @field:ValidUUID val clienteId: String,
+        @field:NotBlank @field:ValidUUID val pixId: String,
+    ) : Filtro() {
+
+        override fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo {
+            val possivelChavePix =
+                repository.findByIdAndIdentificadorCliente(UUID.fromString(pixId), UUID.fromString(clienteId))
+            if (possivelChavePix.isPresent) {
+                return ChavePixInfo.build(possivelChavePix.get())
+            } else {
+                throw ChavePixInexistenteException("Chave Pix não encontrada")
+            }
+        }
+    }
+
+    @Introspected
+    data class PorChave(@field:NotBlank @Size(max = 77) val chave: String) : Filtro() {
+
+        override fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo {
+            val possivelChave = repository.findByChave(chave)
+            if (possivelChave.isPresent) {
+                return ChavePixInfo.build(possivelChave.get())
+            }
+            val responseBcb = bcbClient.busca(chave)
+            if(responseBcb.status.code == 200){
+                return responseBcb.body().convertToChavePixInfo()
+            }
+            throw ChavePixInexistenteException("Chave Pix não encontrada")
+        }
+    }
+
+    @Introspected
+    class Invalido() : Filtro() {
+        override fun filtra(repository: ChavePixRepository, bcbClient: BcbClient): ChavePixInfo {
+            throw IllegalArgumentException("Chave Pix inválida ou não informada")
+        }
+    }
+}
+
+
+Uma classe sealed é como se fosse um ENUM de classes com mais recursos e herança misturado. Foi declarado um metodo abstrato na classe Filtro que é sealed e por isso toda classe "filha" de Filtro terá que implementar esse método. 
+Criei 3 filhas, uma para quando o cliente utilizar a opção FiltroPorIds, outra para quando utilizar a opção CHAVE e a terceira para lançar erro caso não seja nenhuma das duas primeiras. (Lembre-se que FiltroPorIds e Chave são opcções do serviço declarado no .proto)
+A classe filtro vai ganhar atrvés do construtor um repository e um cliente http, para assim poder fazer suas buscas.
+Cada classe filha recebe parâmetros diferentes e já validados com anotações do Bean Validation.
+
+
+Na classe ConsultaChaveEndpoint vamos criar uma extension function para transformar a request em uma classe Filtro (já estavamos usando essa logica antes). Dentro dessa classe atraves do filtroCase (campo dado pelo .proto) vamos saber qual dado o usuário preencheu, o nome desse campo é sempre o NomeDadoAoOneof + Case. Sabendo qual dado ele preencheu vamos saber qual classe Filtro será usada (terá que ser uma filha de Filtro).
+A implementação ficou assim:
+
+@Singleton
+@ExceptionHandler
+class ConsultaChaveEndpoint(
+    @Inject private val repository: ChavePixRepository,
+    @Inject private val bcbClient: BcbClient,
+    @Inject private val validator: Validator,
+) : KeyManagerConsultaGrpcServiceGrpc.KeyManagerConsultaGrpcServiceImplBase() {
+
+    override fun consultaChave(
+        request: ConsultaChaveRequest,
+        responseObserver: StreamObserver<ConsultaChaveResponse>
+    ) {
+
+        val filtro = request.toModel(validator)
+        val chavePixInfo = filtro.filtra(repository, bcbClient)
+
+        val contaMessage = ContaMessage.newBuilder()
+            .setInstituicao(chavePixInfo.dadosBancarios.instituicao)
+            .setAgencia(chavePixInfo.dadosBancarios.agencia)
+            .setNumero(chavePixInfo.dadosBancarios.numero)
+            .setTipoContaMessage(TipoContaMessage.valueOf(chavePixInfo.tipoConta.name))
+            .build()
+
+        val titular = TitularMessage.newBuilder()
+            .setCpf(chavePixInfo.dadosBancarios.cpf)
+            .setNome(chavePixInfo.dadosBancarios.titularNome)
+            .build()
+
+        //Peguei a data e horario que estava salvo, fiz ele virar Instante seguindo o UTC.
+        val registradaEm = chavePixInfo.registradaEm.atZone(ZoneId.of("UTC")).toInstant()
+
+        //Atraves de registradaEm vou gerar um Timestamp do google
+        val criadoEm = Timestamp.newBuilder()
+            .setNanos(registradaEm.nano)
+            .setSeconds(registradaEm.epochSecond)
+            .build()
+
+        val response = ConsultaChaveResponse.newBuilder()
+            .setIdentificadorCliente(chavePixInfo.clienteId.toString() ?: "")
+            .setPixId(chavePixInfo.pixId.toString() ?: "")
+            .setValorDaChave(chavePixInfo.chave)
+            .setTipoChaveMessage(TipoChaveMessage.valueOf(chavePixInfo.tipoChave.name))
+            .setConta(contaMessage)
+            .setCriadoEm(criadoEm)
+            .setTitular(titular)
+            .build()
+
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+}
+
+fun ConsultaChaveRequest.toModel(validator: Validator): Filtro {
+
+    //filtroCase é campo interno do oneof que usamos, atraves dele sabemos qual campo foi preenchido
+    val filtro = when (filtroCase!!) {
+
+        //Verfificando se foi preenchido o FiltroPorIds
+        ConsultaChaveRequest.FiltroCase.FILTROPORIDS -> filtroPorIds.let {
+            Filtro.PorFiltroIds(clienteId = it.identificadorCliente, pixId = it.pixId)
+        }
+
+        //Verfificando se foi preenchido o Chave
+        ConsultaChaveRequest.FiltroCase.CHAVE -> Filtro.PorChave(chave)
+
+        //Verfificando se nenhum foi preenchido
+        ConsultaChaveRequest.FiltroCase.FILTRO_NOT_SET -> Filtro.Invalido()
+    }
+
+    //Validando o objeto filtro seguindo suas anotações do Bean Validation
+    val violations = validator.validate(filtro)
+    if (violations.isNotEmpty()) {
+        throw ConstraintViolationException(violations);
+    }
+
+    return filtro
+}
+
+

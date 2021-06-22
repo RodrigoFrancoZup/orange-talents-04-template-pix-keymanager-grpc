@@ -1,0 +1,76 @@
+Já sabemos que o arquivo .proto já define um objeto de entrada (Objeto de representação), que serve como DTO ou Request, só que a classe definida no .proto não podemos adicionar as anotaçõs do Bean Validation ou algo do tipo, então é comum criamos (nós mesmos) uma classe DTO que vai ter as anotações do Bean Validation, e transformar a Request do .proto nessa DTO com anotações.
+Nesse desafio temos a classe RegistroChaveRequest que foi definida no arquivo .proto e vamos transformá-la para ChavePixDto (essa vamos criar e por anotações).
+Na classe ChavePixDto também teremos o método que transforma a mesma em entidade (igual faziamos no Spring). Veja como ficou:
+
+@ValidPixKey
+@Introspected
+data class ChavePixDto(
+    @field:ValidUUID
+    @field:NotBlank
+    val clienteId: String,
+
+    @field:NotNull
+    val tipo: TipoChave?,
+
+    @field:Size(max = 77)
+    val chave: String,
+
+    @field:NotNull
+    val tipoConta: TipoConta?
+){
+
+    fun toModel(): ChavePix {
+        return ChavePix(
+            identificadorCliente = UUID.fromString(clienteId),
+            tipoChave = tipo!!,
+            tipoConta = tipoConta!!,
+            chave = if(tipo == TipoChave.ALEATORIA) UUID.randomUUID().toString() else this.chave
+        )
+    }
+}
+
+Agora na classe que implementa o serviço declarado no arquivo .proto temos que que converter o RegistraChaveRequest  para ChavePixDto, mas como vamos criar esse método, normalmente  faríamos o método dentro da classe RegistraChaveRequest, mas esse foi gerado na compilação do .proto. No Kotlin podemos utilizar a ExtensionFunctions, com ela vamos criar uma função dentro de uma classe que não foi criada por nós. Podemos fazer isso em outro arquivo separado ou onde já tem uma classe. Vamos fazer na mesma classe que implementa o serviço do arquivo .proto, no caso ChavePixEndpoint, depois de fechar essa classe basta criar a função:
+
+fun RegistraChaveRequest.toChavePixDto() : ChavePixDto{
+
+    return ChavePixDto(
+        clienteId = this.identificadorCliente,
+        tipo = when(this.tipoChaveMessage){
+            TipoChaveMessage.TIPO_CHAVE_INDEFINIDO -> null
+            else -> TipoChave.valueOf(this.tipoChaveMessage.name)
+        },
+        tipoConta = when(this.tipoContaMessage){
+            TipoContaMessage.TIPO_CONTA_INDEFINIDO -> null
+            else -> TipoConta.valueOf(this.tipoContaMessage.name)
+        },
+        chave = this.valorDaChave
+    )
+}
+
+Assim na classe RegistraChaveEndpoint poderemos fazer:
+	val chavePixDto = request.toChavePixDto()
+
+A classe RegistraChaveEndpoin completa vai ficar:
+
+class RegistraChaveEndpoint(@Inject val chavePixService: ChavePixService) : KeyManagerServiceGrpc.KeyManagerServiceImplBase() {
+
+    override fun registraChave(
+        request: RegistraChaveRequest,
+        responseObserver: StreamObserver<RegistraChaveResponse>
+    ) {
+        val chavePixDto = request.toChavePixDto()
+        val chavePix = chavePixService.registra(chavePixDto)
+
+        val response = RegistraChaveResponse.newBuilder()
+            .setPixId(chavePix.id.toString())
+            .build()
+
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+    }
+
+}
+
+//Depois dela no mesmo arquivo vem o método para converter a Request do .proto para ChavePixDto...
+
+

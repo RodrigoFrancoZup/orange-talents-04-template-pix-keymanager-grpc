@@ -1,0 +1,125 @@
+Através da classe ConsultaChaveEndpoint vamos criar a classe ConsultaChaveEndpointTest. Nela vamos criar funções para testar os dois tipos de consultas que temos (PixId com ClienteId) e (Valor da chave Pix).
+
+Como foi criado um serviço novo no arquivo .proto, devemos criar um cliente gRPC para esse serviço.  Então no mesmo pacote que ficou a classe ConsultaChaveEndpointTest criar a classe ClientGrpcFactory. Seu conteudo será:
+
+@Factory
+class ClientGrpcFactory {
+
+    @Singleton
+    fun blockingStub(@GrpcChannel(GrpcServerChannel.NAME) channel: ManagedChannel): KeyManagerConsultaGrpcServiceGrpc.KeyManagerConsultaGrpcServiceBlockingStub? {
+        return KeyManagerConsultaGrpcServiceGrpc.newBlockingStub(channel)
+    }
+}
+
+Voltando agora para classe ConsultaChaveEndpointTest. Vamos prerpar os objetos que vamos utilizar para teste. São eles: o ChavePixRepository, Client gRpc do serviço de consulta e um Client Http para o serviço do Banco Central do Brasil. Os dois primeiros são injetados via construtor da classe e o último vamos cirar como property lateinit e anotado com @field:Inject. Veja como ficará:
+
+@MicronautTest(transactional = false)
+internal class ConsultaChaveEndpointTest(
+    @Inject val repository: ChavePixRepository,
+    @Inject val grpcClient: KeyManagerConsultaGrpcServiceGrpc.KeyManagerConsultaGrpcServiceBlockingStub
+) {
+
+    @field:Inject
+    lateinit var bcbClient: BcbClient
+
+
+    @MockBean(BcbClient::class)
+    fun mockBcbClient(): BcbClient {
+        return Mockito.mock((BcbClient::class.java))
+    }
+
+}
+
+Agora podemos criar os testes (as funções). Veja como ficou o primeiro teste:
+
+@Test
+fun `deve testar a consulta de uma chave pix atraves do pixId e do clientId`(){
+
+    //Cenario
+    repository.deleteAll()
+
+    val clienteId = UUID.randomUUID()
+    val dadosBancarios = DadosBancarios("123", "123", "Itau", "Yuri", "99999999999")
+    val chavePix = ChavePix(identificadorCliente = clienteId, tipoChave = TipoChave.EMAIL, tipoConta = TipoConta.CONTA_CORRENTE, chave = "yuri@zup.com.br", dadosBancario = dadosBancarios)
+
+    repository.save(chavePix)
+
+    //Ação
+    //Para criar um request de Oneof, primeiro se cria o atributo de oneof!
+    val request = ConsultaChaveRequest.newBuilder()
+        .setFiltroPorIds(ConsultaChaveRequest.FiltroPorIds.newBuilder()
+            .setIdentificadorCliente(clienteId.toString())
+            .setPixId(chavePix.id.toString())
+            .build())
+        .build()
+
+    val response =  grpcClient.consultaChave(request)
+
+    //Verificação
+    Assertions.assertEquals(response.valorDaChave, chavePix.chave)
+
+}
+
+Note que agora a request era do tipo oneof (essa declaração se encontra no arquivo .proto) Para se criar uma request deste tipo o primeiro build é do parâmetro do oneof que queremos preencher, neste caso usamos o setFiltroPorIds porque queriamos preencher o filtroPorIds (no arquivo .proto ele está como filtroPorIds), como o parâmetro filtroPorIds é do tipo FiltroPorIds (que é message/classe) e este contem dois  valores nós tivemos que criá-los, no caso foram o identificadorCliente e pixId.
+A seguir um teste onde preencheríamos o campo chave ao inves de filtroPorIds:
+
+@Test
+fun `deve encontrar uma chave pix em nosso sistema atraves do seu valor`(){
+
+    //Cenario
+    repository.deleteAll()
+
+    val clienteId = UUID.randomUUID()
+    val dadosBancarios = DadosBancarios("123", "123", "Itau", "Yuri", "99999999999")
+    val chavePix = ChavePix(identificadorCliente = clienteId, tipoChave = TipoChave.EMAIL, tipoConta = TipoConta.CONTA_CORRENTE, chave = "yuri@zup.com.br", dadosBancario = dadosBancarios)
+
+    repository.save(chavePix)
+
+    //Ação
+    //Para criar um request de Oneof, primeiro se cria o atributo de oneof!
+    val request = ConsultaChaveRequest.newBuilder()
+        .setChave(chavePix.chave)
+        .build()
+
+    val response =  grpcClient.consultaChave(request)
+
+    //Verificação
+    Assertions.assertEquals(response.valorDaChave, chavePix.chave)
+    Assertions.assertEquals(response.identificadorCliente, chavePix.identificadorCliente.toString())
+    Assertions.assertEquals(response.pixId, chavePix.id.toString())
+
+}
+
+Teste agora, no cenário que chave não está em nosso sistema, mas está no BCB:
+
+@Test
+fun `deve encontrar uma chave pix no sistema do bcb atraves do seu valor`() {
+
+    //Cenario
+    repository.deleteAll()
+    
+    /**
+     * Não salvei a chave pix em nosso sistema e vou fazer o BCB responder que encontrou a chave em seu sistema.
+     */
+
+    val bcbResponse = PixKeyDetailsResponse(
+        keyType = KeyType.EMAIL, key = "yuri@zup.com.br",
+        bankAccount = BankAccount(DadosBancarios.ITAU_UNIBANCO_ISPB, "123", "123", AccountType.CACC),
+        Owner(TypeOwner.NATURAL_PERSON, "Yuri", "99999999999"), LocalDateTime.now()
+    )
+
+    Mockito.`when`(bcbClient.busca(bcbResponse.key)).thenReturn(HttpResponse.ok(bcbResponse))
+
+    //Ação
+    val request = ConsultaChaveRequest.newBuilder()
+        .setChave(bcbResponse.key)
+        .build()
+
+    val response = grpcClient.consultaChave(request)
+
+    //Verificação
+    Assertions.assertEquals(response.valorDaChave, bcbResponse.key)
+
+}
+
+

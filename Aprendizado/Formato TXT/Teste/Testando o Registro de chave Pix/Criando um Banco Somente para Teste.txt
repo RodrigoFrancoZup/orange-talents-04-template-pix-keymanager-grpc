@@ -1,0 +1,19 @@
+Vamos usar o banco H2 para os teste.
+No arquivo build.gradle na seção dependencies adicionar:
+	testImplementation("com.h2database:h2")
+
+Vamos duplicar o arquivo application.yml só que o arquivo nome se chamará application-test.yml (podemos deixar na mesma pasta). Seu contúdo será:
+
+datasources:
+  default:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    driverClassName: org.h2.Driver
+
+##
+# Habilita log do Contexto transacional
+##
+
+logger:
+  levels:
+    io.micronaut.transaction: DEBUG
+

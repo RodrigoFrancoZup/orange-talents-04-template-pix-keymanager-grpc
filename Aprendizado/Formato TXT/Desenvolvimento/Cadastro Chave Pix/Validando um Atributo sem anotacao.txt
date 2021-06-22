@@ -1,0 +1,7 @@
+Aplicando a validação diretamente em um atributo sem anotação. Isso se faz necessário quando o tipo de validação do atributo é influenciado por outro campo/coisa, por exemplo a chave pix, se seu tipo for email temos que aplicar @Email no atributo chave, se o tipo for CPF temos que aplicar o @CPF e assim por diante, e não podemos colocar várias anotações, no caso não podemos @CPF, @EMAIL... Então a solução é criar uma anotação customizada para Classe e dentro dela fariamos um if para ver qual tipo de chave é assim aplicar a validação direto na chave, ou seja, se eu entrar no if tipo == email vou aplicar:
+
+    val resposta = EmailValidator().let {
+        it.isValid("opa@gmail.com.br", null)
+    
+    println(resposta)
+}

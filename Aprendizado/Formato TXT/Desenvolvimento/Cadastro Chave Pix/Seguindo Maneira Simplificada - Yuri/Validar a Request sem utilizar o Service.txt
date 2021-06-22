@@ -1,0 +1,41 @@
+Comecei a implementar o cadastro de chave pix de minha maneira, mas na hora da validar eu estava fazendo vários if's no código e isso não é viável. Então eu comecei a fazer a validação igual o mentor Rafal ensinava, no caso era: Transformar a request em uma classe DTO e essa classe DTO teria as validações do Bean Validation e depois enviar o objeto DTO para um método do Service, pois assim eu poderia adicionar o @Valid na parâmetro que receberia o DTO e a validação ocorreria! Talvez essa seja a melhor maneira. 
+Mas o Yuri deu uma Aula de como usar a Interface Validator que é da especifícação Bean Validation e será dessa forma que vou seguir e explicar aqui.
+
+Estamos na classe RegistraChaveEndpoint e é essa classe que vai implementar o serviço descrito no arquivo .proto. Nessa classe vamos injetar um objeto do tipo Validator (do pacote javax), ou seja, no construtor dessa classe vamos colocar: @Inject val validator: Validator
+Obs: Com um Validator podemos fazer: 
+	val erros = validator.validate(objetoComAsAnotacoes)
+	if(erros.isNotEmpty){
+		throws ConstraintViolationExcpetion(erros)
+	}
+
+Vamos criar agora uma Extension Function da classe RegistraChaveRequest, lembre-se que com essa técnica vamos poder criar uma função em uma classe que nem foi feita por nós, tanto é verdade que essa classe foi gerada na compilação do arquivo .proto e vamos criar nela uma função. Poderíamos criar essa Extension Function em outro arquivo ou no mesmo que encontra-se a classe RegistraChaveEndpoint, e será assim que vou fazer, após fechar a classe RegistaChaveEndpoint vou colocar:
+
+fun RegistraChaveRequest.toChavePixValidada(): ChavePix {
+
+}
+
+E será dentro desse bloco que vou converter a Request para Entidade e validá-la ao mesmo tempo! Para isso vou precisar receber por parâmetro o Validator que já foi injetado na classe RegistraChaveEndpoint. O método ficará assim:
+
+fun RegistraChaveRequest.toChavePixValidada(validator: Validator): ChavePix {
+    val chavePix = ChavePix(
+        clienteId = this.identificadorCliente,
+        tipo = when (this.tipoChaveMessage) {
+            TipoChaveMessage.TIPO_CHAVE_INDEFINIDO -> null
+            else -> this.tipoChaveMessage
+        },
+        tipoConta = when (this.tipoContaMessage) {
+            TipoContaMessage.TIPO_CONTA_INDEFINIDO -> null
+            else -> this.tipoContaMessage
+        },
+        chave = this.valorDaChave
+    )
+
+    val erros = validator.validate(chavePix)
+    if (erros.isNotEmpty()) {
+        throw ConstraintViolationException(erros)
+    }
+
+    return chavePix
+}
+
+Obs: Para isso funcionar os atributos ou a classe ChavePix precisam ter as anotações do BeanValidation!

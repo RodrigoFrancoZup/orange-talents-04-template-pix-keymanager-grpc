@@ -1,0 +1,42 @@
+Sabemos que quando tentamos criar uma chave de um tipo, mas passamos o valor errado (por exemplo chave tipo EMAIL, com valor rodrigo.com.br - não tem o "@") uma Exception deve ser lançada. O mesmo deve ocorrer ao tentar cadastrar uma chave com o mesmo valor.
+
+Como fazer isso? Sabemos que já estamos trado os erros, logo o Status do erro também é lançada/Enviada ao usuário. Basta então conferir o erro capturado na ação/requisição com o status que o cliente recebeu. O código ficará assim:
+
+@Test
+fun `deve gerar uma exception ao cadastar chave email incorreto`() {
+    //Cenário
+    repository.deleteAll()
+    val request = RegistraChaveRequest.newBuilder()
+        .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
+        .setTipoChaveMessage(TipoChaveMessage.EMAIL)
+        .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+        .setValorDaChave("mentorzup.com.br")
+        .build()
+
+    val responseItauClient = ContasItauResponse(
+        TipoConta.CONTA_CORRENTE, "123", "123",
+        InstituicaoResponse("Itau", "789"),
+        TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
+    )
+
+    Mockito.`when`(
+        itauClient.buscaContaPorClienteETipo(
+            request.identificadorCliente,
+            request.tipoContaMessage.name
+        )
+    ).thenReturn(HttpResponse.ok(responseItauClient))
+
+    //Ação
+    val erro = assertThrows(StatusRuntimeException::class.java){
+        grpcClient.registraChave(request)
+    }
+
+    //Verificação
+    assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
+
+}
+
+
+Obs: Em teste de gRPC é bom desligar a transação com: @MicronautTest(transactional = false)
+Principalmente quando adicionarmos algo no banco para depois testar
+
