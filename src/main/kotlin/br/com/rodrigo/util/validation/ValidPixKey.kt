@@ -1,12 +1,11 @@
 package br.com.rodrigo.pix.registra
 
-import io.micronaut.validation.Validated
 import javax.inject.Singleton
 import javax.validation.Constraint
 import javax.validation.Payload
-import kotlin.reflect.KClass
 import kotlin.annotation.AnnotationTarget.CLASS
 import kotlin.annotation.AnnotationTarget.TYPE
+import kotlin.reflect.KClass
 
 @MustBeDocumented
 @Target(CLASS, TYPE)

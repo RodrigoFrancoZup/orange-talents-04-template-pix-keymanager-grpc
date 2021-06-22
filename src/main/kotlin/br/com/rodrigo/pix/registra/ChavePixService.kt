@@ -22,41 +22,40 @@ class ChavePixService(
 ) {
 
 
-    fun registra(@Valid chavePixDto: ChavePixDto):ChavePix{
+    fun registra(@Valid chavePixDto: ChavePixDto): ChavePix {
 
-         val chavePix: ChavePix
 
         // Verifica se chave já existe/já é usada
-        if(repository.existsByChave(chavePixDto.chave)){
+        if (repository.existsByChave(chavePixDto.chave)) {
             throw  ChavePixExistenteException("A chave ${chavePixDto.chave} já está cadastrada!")
         }
 
         //Consultando o serviço do Itau para ver se o clienteId informado tem de fato a conta
-        val contaItauResponse = client.buscaContaPorClienteETipo(chavePixDto.clienteId, chavePixDto.tipoConta.toString())
+        val contaItauResponse =
+            client.buscaContaPorClienteETipo(chavePixDto.clienteId, chavePixDto.tipoConta.toString())
 
         //Se a consulta ao serviço Itau confirmou que há conta, podemos salvar
-        if(contaItauResponse.body.isPresent){
+        if (contaItauResponse.body.isPresent) {
             val body = contaItauResponse.body
-            chavePix = chavePixDto.toModel(body.get().toDadosBancarios())
+            val chavePix = chavePixDto.toModel(body.get().toDadosBancarios())
 
             //Cadastrando no BCB
-            val responseBcb = clientBcbClient.cadastra(CreatePixKeyRequest.build(chavePix))
+            val createPixKeyRequest = CreatePixKeyRequest.build(chavePix)
+            val responseBcb = clientBcbClient.cadastra(createPixKeyRequest)
 
             //Verifica se conseguiu salvar a chave no BCB
-            if(responseBcb.code() == 201){
-                if(responseBcb.body().keyType == KeyType.RANDOM){
-                    chavePix.atualizaChaveAleatoriaBcb(responseBcb.body().key)
+            if (responseBcb.code() == 201) {
+                if (responseBcb.body()!!.keyType == KeyType.RANDOM) {
+                    chavePix.atualizaChaveAleatoriaBcb(responseBcb.body()!!.key)
                 }
 
                 repository.save(chavePix)
-            }else{
+            } else {
                 throw IllegalStateException("Erro ao registrar chave Pix no Banco Central do Brasil (BCB)")
             }
-
-        }else{
+            return chavePix
+        } else {
             throw IllegalStateException("Cliente não encontrado no Itau")
         }
-
-        return chavePix
     }
 }

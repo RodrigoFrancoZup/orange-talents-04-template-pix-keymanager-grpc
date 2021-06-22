@@ -23,6 +23,7 @@ import java.time.LocalDateTime
 import java.util.*
 import javax.inject.Inject
 
+
 @MicronautTest(transactional = false)
 internal class RegistraChaveEndpointTest(
     val grpcClient: KeyManagerGrpcServiceGrpc.KeyManagerGrpcServiceBlockingStub,
@@ -110,10 +111,11 @@ internal class RegistraChaveEndpointTest(
             .setIdentificadorCliente("bc35591d-b547-4151-a325-4a9d2cd19614")
             .setTipoChaveMessage(TipoChaveMessage.ALEATORIA)
             .setTipoContaMessage(TipoContaMessage.CONTA_CORRENTE)
+            .setValorDaChave("")
             .build()
 
         val requestBcb = CreatePixKeyRequest(
-            keyType = KeyType.RANDOM, key = "",
+            keyType = KeyType.RANDOM, key = "bb0e58f7-2b1c-4ce5-b3ac-2867fa665fc2",
             bankAccount = BankAccount(
                 participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
                 branch = "123",
@@ -124,7 +126,7 @@ internal class RegistraChaveEndpointTest(
         )
 
         val responseBcb = CreatePixKeyResponse(
-            keyType = KeyType.RANDOM, key = "bc35591d-b547-4151-a325-4a9d2cd19614",
+            keyType = KeyType.RANDOM, key = UUID.randomUUID().toString(),
             bankAccount = BankAccount(
                 participant = DadosBancarios.ITAU_UNIBANCO_ISPB,
                 branch = "123",
@@ -140,6 +142,7 @@ internal class RegistraChaveEndpointTest(
             InstituicaoResponse("Itau", "789"),
             TitularResponse(UUID.randomUUID(), "Rodrigo", "99999999999")
         )
+
 
         Mockito.`when`(
             itauClient.buscaContaPorClienteETipo(
@@ -214,9 +217,9 @@ internal class RegistraChaveEndpointTest(
 
 
         //Ação
-       val erro = assertThrows(StatusRuntimeException::class.java){
-           grpcClient.registraChave(request)
-       }
+        val erro = assertThrows(StatusRuntimeException::class.java) {
+            grpcClient.registraChave(request)
+        }
 
         //Verificação
         assertEquals(Status.INVALID_ARGUMENT.code, erro.status.code)
@@ -489,4 +492,7 @@ internal class RegistraChaveEndpointTest(
     fun mockBcbClient(): BcbClient {
         return Mockito.mock((BcbClient::class.java))
     }
+
+
+
 }

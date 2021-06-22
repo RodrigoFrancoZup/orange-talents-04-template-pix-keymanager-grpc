@@ -33,6 +33,6 @@ class DadosBancarios(
 ) {
 
     companion object {
-        public val ITAU_UNIBANCO_ISPB: String = "60701190"
+         val ITAU_UNIBANCO_ISPB: String = "60701190"
     }
 }

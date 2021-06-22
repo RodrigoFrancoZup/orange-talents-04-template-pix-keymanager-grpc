@@ -6,6 +6,7 @@ option java_outer_classname = "KeyManagerGrpc";
 
 
 package br.com.rodrigo;
+import "google/protobuf/timestamp.proto";
 
 service KeyManagerGrpcService  {
   rpc registraChave (RegistraChaveRequest) returns (RegistraChaveResponse) {}
@@ -14,6 +15,10 @@ service KeyManagerGrpcService  {
 
 service KeyManagerRemoveGrpcService{
   rpc removeChave (RemoveChaveRequest) returns (RegistraChaveResponse) {}
+}
+
+service KeyManagerConsultaGrpcService{
+  rpc consultaChave (ConsultaChaveRequest) returns (ConsultaChaveResponse) {}
 }
 
 enum TipoChaveMessage{
@@ -31,6 +36,27 @@ enum TipoContaMessage{
   CONTA_POUPANCA = 2;
 }
 
+message ConsultaChaveRequest{
+  message FiltroPorIds{
+    string identificadorCliente = 1;
+    string pixId = 2;
+  }
+  oneof filtro{
+    FiltroPorIds filtroPorIds = 1;
+    string chave = 2;
+  }
+}
+
+message ConsultaChaveResponse{
+  string identificadorCliente = 1;
+  string pixId = 2;
+  TipoChaveMessage tipoChaveMessage = 3;
+  string valorDaChave = 4;
+  TitularMessage titular = 5;
+  ContaMessage conta = 6;
+  google.protobuf.Timestamp criadoEm = 7;
+}
+
 message RemoveChaveRequest{
   string identificadorCliente = 1;
   string pixId = 2;
@@ -45,4 +71,16 @@ message RegistraChaveRequest {
 
 message RegistraChaveResponse {
   string pixId = 1;
+}
+
+message TitularMessage{
+  string nome = 1;
+  string cpf = 2;
+}
+
+message ContaMessage{
+  string instituicao = 1;
+  string agencia = 2;
+  string numero = 3;
+  TipoContaMessage tipoContaMessage = 4;
 }
